@@ -461,5 +461,100 @@ example (n: Nat):
 
 end BrutalCleanup
 
+/-! ## A pure `let` without a Hoare triple
+
+`step` used to fail on a `let` whose value has no `HoareTriplePure` instance
+(a record construction, a projection, ...), forcing proofs to zeta-expand it by
+hand with `dsimp only`. It now keeps the binding as a local definition. -/
+
+section PureLetWithoutTriple
+
+section Axiomatization
+
+set_option warn.sorry false
+
+structure Conn where
+  k: Bytes
+  n: Bytes
+
+def send_any (b: Bytes): Traceful Unit := sorry
+
+instance:
+  HoareTriple (send_any b) (fun _ => True) (fun _ _ => True)
+  where
+    pf := sorry
+
+end Axiomatization
+
+def testPureLet (b: Bytes): Traceful Unit := do
+  let m ← receive_message 0
+  let conn : Conn := { k := m, n := b }
+  send_any conn.k
+
+example (b: Bytes):
+  HoareTriple (testPureLet b) (fun _ => True) (fun _ _ => True)
+:= by
+  unfold testPureLet
+  step
+  step -- the pure `let conn`: kept as a local definition
+  step
+  trivial
+
+/-- A `let` that DOES have a triple whose precondition cannot be discharged must
+still be reported, rather than silently degrading to a plain definition. -/
+def testPureLetBadPre (b: Bytes): Traceful Unit := do
+  let hb := hash b -- needs `b.Invariant tr`, which is not available
+  send_any hb
+
+set_option warn.sorry false in
+example (b: Bytes):
+  HoareTriple (testPureLetBadPre b) (fun _ => True) (fun _ _ => True)
+:= by
+  unfold testPureLetBadPre
+  apply HoareTriple.mk
+  fail_if_success step
+  sorry
+
+end PureLetWithoutTriple
+
+/-! ## `step` on a `HoareTripleGhost` goal
+
+`step` used to recognize only `wp` / `hoareTriple` / `HoareTriple` goals, and
+answered `not a constant` on a `HoareTripleGhost` one. -/
+
+section GhostTripleGoal
+
+section Axiomatization
+
+set_option warn.sorry false
+
+def ghostAction (_lab: Label): Traceful Bytes := mk_rand 32
+
+instance: HasGhostArgumentType (ghostAction lab) Label where
+  dummy := ()
+
+instance:
+  HoareTripleGhost (ghostAction lab) lab
+    (fun _ => True)
+    (fun b tr => is_knowable_by b lab tr)
+  where
+    pf := sorry
+
+end Axiomatization
+
+example:
+  HoareTripleGhost (ghostAction lab) lab (fun _ => True) (fun b tr => b.Invariant tr)
+:= by
+  step with ⟨ lab ⟩
+  grind
+
+-- ... and a goal that is none of the above is still refused, with a message
+-- naming the head symbol it did find.
+example (n: Nat): n = n := by
+  fail_if_success step
+  rfl
+
+end GhostTripleGoal
+
 end StepTest
 

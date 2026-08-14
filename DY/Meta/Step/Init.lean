@@ -49,8 +49,14 @@ def preservesInvariantTelescope
       pure (xs_and_bi, StepSpecTheorem.wp args[5]! args[6]! args[7]!)
     else if fName = ``DY.HoareTriple then
       pure (xs_and_bi, StepSpecTheorem.hoareTripleTC)
+    else if fName = ``DY.HoareTripleGhost then
+      pure (xs_and_bi, StepSpecTheorem.hoareTripleGhostTC)
     else
-      throwError "not a constant"
+      throwError
+        "`step` does not recognize this goal.\n\
+         Expected `DY.wp`, `DY.hoareTriple`, `DY.HoareTriple` or `DY.HoareTripleGhost`, \
+         but the head symbol is `{fName}`.\n\
+         Goal: {type}"
 
 inductive SpecType where
   | let_binding (x:Expr) (xName:Name)
@@ -689,8 +695,33 @@ def evalStepFinal
       xName := `x
     }
 
+/--
+  Read the trace a `wp` goal is about, i.e. the `tr` in `wp x post tr`.
+-/
 meta
-def applyLetTheorem (args: StepArgs) (goal: MVarId) (letFv: FVarId): TacticM Unit :=
+def goalTrace? (goal: MVarId): MetaM (Option Expr) :=
+  goal.withContext do
+  let type ← (← goal.getType).sanitize
+  let (fName, args) := type.getAppFnArgs
+  if fName = ``DY.wp && args.size = 8 then
+    pure (some args[7]!)
+  else
+    pure none
+
+/--
+  Apply `apply_hoare_triple_pure` to install the postcondition of a pure `let`.
+
+  With `allowNoTriple`, a `let` whose value has no
+  `HasGhostArgumentType` / `HoareTriplePureGhost` instance is reported by
+  returning `false` instead of failing. The goal is only touched once both
+  instances have been resolved, so bailing out leaves no trace behind — and, in
+  particular, a failure to discharge the *precondition* is still raised.
+-/
+meta
+def applyLetTheorem
+  (args: StepArgs) (goal: MVarId) (letFv: FVarId)
+  (allowNoTriple: Bool := false)
+  : TacticM Bool :=
   goal.withContext do
   withTraceNode `Step (fun _ => pure m!"Apply let theorem") do
     -- applyTheoremExprForall = apply_hoare_triple_pure
@@ -705,12 +736,31 @@ def applyLetTheorem (args: StepArgs) (goal: MVarId) (letFv: FVarId): TacticM Uni
 
     -- x
     applyMVars[5]!.safeAssign (.fvar letFv)
-    -- ghost things
-    assignGhostParameter args applyMVars[8]! applyMVars[4]!
-    -- HoareTriplePureGhost instance
-    applyMVars[9]!.assignTypeclassInstance
-    -- tr
-    applyMVars[10]!.assumption -- "I am feeling lucky" (works if there is only one `ProofTrace` in the local context)
+
+    -- ghost things, then the HoareTriplePureGhost instance.
+    -- Both only assign metavariables local to this function.
+    let hasTriple ←
+      try
+        assignGhostParameter args applyMVars[8]! applyMVars[4]!
+        applyMVars[9]!.assignTypeclassInstance
+        pure true
+      catch e =>
+        match e with
+        | .internal .. => throw e
+        | _ =>
+          unless allowNoTriple do throw e
+          trace[Step] "no pure Hoare triple for this let: {e.toMessageData}"
+          pure false
+    unless hasTriple do
+      return false
+
+    -- tr: read it off the `wp` goal itself. Resolving it by `assumption` picks
+    -- the first `ProofTrace` in the local context, which is the wrong one as
+    -- soon as several traces coexist (e.g. proofs mixing `step` with manual
+    -- `Traceful.bind_wp`).
+    match ← goalTrace? goal with
+    | some tr => applyMVars[10]!.safeAssign tr
+    | none => applyMVars[10]!.assumption
 
     let pfPreMVar := applyMVars[11]!
     solvePrecondition args pfPreMVar
@@ -728,13 +778,25 @@ def applyLetTheorem (args: StepArgs) (goal: MVarId) (letFv: FVarId): TacticM Uni
 
     let goals ← getUnsolvedGoals
     setGoals ([goal] ++ goals)
+    return true
 
 meta
 def evalStepLet (args: StepArgs): TacticM Unit :=
   withTraceNode `Step (fun _ => pure m!"Apply step let") do
     let goal ← getMainGoal
     let (letFv, goal) ← stepIntro goal
-    applyLetTheorem args goal letFv
+    -- A pure `let` whose value has no `HoareTriplePure` / `HoareTriplePureGhost`
+    -- instance (a record construction, a projection, ...) carries no
+    -- postcondition to install. Rather than failing, keep the binding as a local
+    -- definition -- what `step_intro` does -- so that the goal stays small,
+    -- instead of having to zeta-expand it by hand with `dsimp only`.
+    -- If the caller passed a ghost argument or a discharge tactic they clearly
+    -- expect a triple, so the original error is reported instead.
+    let allowNoTriple := !args.xGhostTermProvided && args.preTactic.isNone
+    let applied ← applyLetTheorem args goal letFv (allowNoTriple := allowNoTriple)
+    unless applied do
+      let goals ← getUnsolvedGoals
+      setGoals ([goal] ++ goals)
 
 meta partial
 def evalStep (args: StepArgs): TacticM Unit := do
@@ -781,6 +843,7 @@ elab (name := step_let) "step_let" letFvSyn:term args:stepArgs: tactic => do
   withMainContext do
   let letFvTerm ← Tactic.elabTerm letFvSyn none
   let letFv := letFvTerm.fvarId!
-  applyLetTheorem (← parseStepArgs args) (← getMainGoal) letFv
+  -- Explicitly asking for a `let`'s triple: report the missing instance loudly.
+  let _ ← applyLetTheorem (← parseStepArgs args) (← getMainGoal) letFv
 
 end DY.Step
