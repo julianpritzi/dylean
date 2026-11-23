@@ -142,6 +142,7 @@ def compromisePrivateKey
 := do
   PersistentLocalState.compromise (SecretKeyState name) skHandle
 
+@[expose]
 public
 def LongTermKeyCompromised
   [ExecConfig name skToPk] [ExecTraceTypes] [ExecTraceTypes.Has (ExecEntryT name)]
@@ -167,6 +168,40 @@ theorem LongTermKeyCompromised_le
 
 grind_pattern LongTermKeyCompromised_le => tr1 ≤ tr2, LongTermKeyCompromised name participant pk tr1
 grind_pattern [grind_later] LongTermKeyCompromised_le => tr1 ≤ tr2, LongTermKeyCompromised name participant pk tr1
+
+/-- `PublicKeyRegistered name p pk tr` -- the `name` PKI holds `pk` as a public
+    key of `p`, because a `generateKeyPair name p` entry recording that pair sits
+    somewhere in `tr`.
+
+    The registration counterpart of `LongTermKeyCompromised`, and the ExecTrace
+    reading of `ProofConfig.IsLongTermPublicKey`: `generateKeyPair` stores the
+    pair through `PersistentGlobalState.storeGlobalState`, which appends a plain
+    state entry rather than a `ProtocolEvent`, so `Trace.EventLogged` does not
+    apply and `Trace.StateStored` reads it instead. -/
+@[expose]
+public
+def PublicKeyRegistered
+  [ExecTraceTypes] [ExecTraceTypes.Has (ExecEntryT name)]
+  (participant: Participant) (pk: Bytes)
+  (tr: ExecTrace)
+  : Prop
+:=
+  tr.StateStored ({ p := participant, pk }: PublicKeyState name)
+
+public
+theorem PublicKeyRegistered_le
+  [ExecTraceTypes] [ExecTraceTypes.Has (ExecEntryT name)]
+  (participant: Participant) (pk: Bytes)
+  (tr1 tr2: ExecTrace)
+  : tr1 ≤ tr2 →
+    PublicKeyRegistered name participant pk tr1 →
+    PublicKeyRegistered name participant pk tr2
+:= by
+  simp [PublicKeyRegistered]
+  grind
+
+grind_pattern PublicKeyRegistered_le => tr1 ≤ tr2, PublicKeyRegistered name participant pk tr1
+grind_pattern [grind_later] PublicKeyRegistered_le => tr1 ≤ tr2, PublicKeyRegistered name participant pk tr1
 
 end Execution
 
@@ -305,6 +340,7 @@ from
 
 #combine
   [BytesFunctor] (name: String)
+  [ExecTraceTypes] [ProofTraceTypes]
   [BytesLength] [BytesInvariants] [BytesInvariantsProofs]
   [BytesFunctor.Has Literal.SubF] [BytesLength.Has Literal.SubF.length]
   [BytesFunctor.Has Concat.SubF] [BytesLength.Has Concat.SubF.length]
@@ -314,6 +350,21 @@ from
   [ExecConfig name skToPk] [ProofConfig name usage lab]
 into
   SubTraceInvariant,
+from
+  PersistentLocalState.CompromisableState (SecretKeyState name),
+  PersistentGlobalState.CompromisableState (PublicKeyState name)
+
+#combine
+  [BytesFunctor] (name: String)
+  [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  [BytesLength] [BytesInvariants] [BytesInvariantsProofs]
+  [BytesFunctor.Has Literal.SubF] [BytesLength.Has Literal.SubF.length]
+  [BytesFunctor.Has Concat.SubF] [BytesLength.Has Concat.SubF.length]
+  [BytesInvariants.Has Literal.invariants] [BytesInvariants.Has Concat.invariants]
+  [ExecTraceTypes.Has <| ExecEntryT name]
+  {skToPk: Bytes → Bytes} {usage: Participant → Usage} {lab: Participant → Bytes → Label}
+  [ExecConfig name skToPk] [ProofConfig name usage lab]
+into
   SubBaseAttackerKnowledgeTheorem__noExecHas,
 from
   PersistentLocalState.CompromisableState (SecretKeyState name),
@@ -370,6 +421,39 @@ theorem generateKeyPair.spec
     grind
   step
   trivial
+
+/-- The registration ENTRY yields the PKI's ProofTrace fact about the same key.
+
+`PublicKeyRegistered` reads a `PublicKeyState name` entry off the ExecTrace,
+where no label lives; `IsLongTermPublicKey` is a `ProofConfig` field over the
+ProofTrace. The trace invariant is the bridge: this entry type's
+`SubTraceInvariant` IS `GlobalStateInv.invariant`, instantiated just above as
+exactly `IsLongTermPublicKey`. -/
+public
+theorem IsLongTermPublicKey_of_registered
+  [BytesFunctor]
+  [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  [BytesInvariants] [BytesInvariantsProofs]
+  [BytesLength] [BytesFunctor.Has Literal.SubF] [BytesLength.Has Literal.SubF.length] [BytesFunctor.Has Concat.SubF] [BytesLength.Has Concat.SubF.length] [BytesInvariants.Has Literal.invariants] [BytesInvariants.Has Concat.invariants]
+
+  (name: String)
+  {skToPk: Bytes → Bytes} {usage: Participant → Usage} {lab: Participant → Bytes → Label}
+
+  [ExecTraceTypes.Has <| ExecEntryT name]
+  [ProofTraceTypes.Has <| ProofEntryT name]
+  [ExecConfig name skToPk] [ProofConfig name usage lab]
+  [TraceInvariant.Has <| ProofEntryT name]
+  (p: Participant) (pk: Bytes) (tr: ProofTrace)
+  : tr.Invariant →
+    PublicKeyRegistered name p pk tr.erase →
+    IsLongTermPublicKey name p pk tr
+:= by
+  intro h_inv h_reg
+  obtain ⟨i, h_at⟩ := Trace.StateStored_imp_StateInv
+    ({ p, pk }: PublicKeyState name) tr h_inv h_reg
+  exact ProofConfig.IsLongTermPublicKey_le (name := name) p pk _ _
+    (Trace.prefix_le tr i)
+    (by simpa [PersistentGlobalState.GlobalStateInv.invariant] using h_at)
 
 @[instance]
 public
