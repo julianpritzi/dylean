@@ -180,6 +180,7 @@ def compromise
 := do
   PersistentGlobalState.compromise (LocalState StateT) handle
 
+@[expose]
 public
 def LocalStateCompromised
   {StateT: Type}
@@ -214,12 +215,41 @@ namespace Compromise
 
 #combine (StateT: Type) into
   ProofEntryT,
+from
+  PersistentGlobalState.Compromise (LocalState StateT)
+
+#combine (StateT: Type) [ExecTraceTypes] [ProofTraceTypes] [LocalStateInv StateT] into
   SubTraceInvariant,
+from
+  PersistentGlobalState.Compromise (LocalState StateT)
+
+#combine (StateT: Type) [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  [BytesFunctor] [BytesInvariants] [LocalStateInv StateT] into
   SubBaseAttackerKnowledgeTheorem,
 from
   PersistentGlobalState.Compromise (LocalState StateT)
 
 end Compromise
+
+/-- A compromised local state satisfied its invariant at the moment it leaked.
+See `PersistentGlobalState.GlobalStateCompromised_imp_invariant`. -/
+public
+theorem LocalStateCompromised_imp_invariant
+  {StateT: Type}
+  [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  [LocalStateInv StateT]
+  [ExecTraceTypes.Has (Compromise.ExecEntryT StateT)]
+  [ProofTraceTypes.Has (Compromise.ProofEntryT StateT)]
+  [TraceInvariant.Has (Compromise.ProofEntryT StateT)]
+  (participant: Participant) (state: StateT)
+  (tr: ProofTrace)
+  : tr.Invariant →
+    LocalStateCompromised participant state tr.erase →
+    ∃ i, LocalStateInv.invariant participant state (tr.prefix i)
+:= by
+  intro h_inv h_comp
+  exact PersistentGlobalState.GlobalStateCompromised_imp_invariant
+    ({ participant, state }: LocalState StateT) tr h_inv h_comp
 
 public
 def label

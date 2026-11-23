@@ -45,6 +45,120 @@ def getGlobalState
   let e: State.ExecEntryT StateT ← getEntry handle
   return e.st
 
+/-- `tr.StateStoredAt st i` -- a `storeGlobalState st` entry sits at position `i`.
+
+`storeGlobalState` appends a plain `State.ExecEntryT`, not a `ProtocolEvent`, so
+`Trace.EventLoggedAt` does not apply. This is its counterpart for stored state,
+and carries the same guarantee: `storeGlobalState.spec` takes the entry's
+invariant as a PRECONDITION, so nothing can append one without discharging it.
+
+`@[expose]` because consumers both construct and destructure it across a module
+boundary. -/
+@[expose, grind]
+public
+def _root_.DY.Trace.StateStoredAt
+  {StateT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (State.ExecEntryT StateT)]
+  (st: StateT) (time: Nat)
+  (tr: ExecTrace)
+  : Prop
+:=
+  tr.at? time = some (State.ExecEntryT.mk st)
+
+public
+theorem _root_.DY.Trace.StateStoredAt_implies_i_le_length
+  {StateT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (State.ExecEntryT StateT)]
+  (st: StateT) (i: Nat)
+  (tr: ExecTrace)
+  : tr.StateStoredAt st i →
+    i < tr.length
+:= by
+  grind [Trace.StateStoredAt]
+
+grind_pattern DY.Trace.StateStoredAt_implies_i_le_length => tr.StateStoredAt st i
+
+public
+theorem _root_.DY.Trace.StateStoredAt_le
+  {StateT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (State.ExecEntryT StateT)]
+  (st: StateT) (time: Nat)
+  (tr1 tr2: ExecTrace)
+  : tr1 ≤ tr2 →
+    tr1.StateStoredAt st time →
+    tr2.StateStoredAt st time
+:= by
+  grind [Trace.StateStoredAt]
+
+grind_pattern DY.Trace.StateStoredAt_le => tr1 ≤ tr2, tr1.StateStoredAt st time
+grind_pattern [grind_later] DY.Trace.StateStoredAt_le => tr1 ≤ tr2, tr1.StateStoredAt st time
+
+/-- `tr.getStateAt StateT i` -- the state stored at position `i`, as a value.
+
+The mirror of `Trace.getEventAt`, and it exists for the same reason: a
+`#guard` cannot evaluate `StateStoredAt`, which is an equation between `Option`s
+of an entry type, but it can evaluate this and compare the result. That is what
+lets a sanity run WITNESS a registration -- the half of a carried obligation's
+well-formedness that says an honest run can meet it, rather than only that a
+run can fail it. -/
+public
+def _root_.DY.Trace.getStateAt
+  (StateT: Type)
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (State.ExecEntryT StateT)]
+  (i: Nat)
+  (tr: ExecTrace)
+  : Option StateT
+:=
+  match (tr.at? i: Option (State.ExecEntryT StateT)) with
+  | none => none
+  | some entry => some entry.st
+
+/-- `StateStoredAt` is exactly what `getStateAt` computes, so a decidable
+    evaluation of the latter discharges the former. The mirror of
+    `Trace.EventLoggedAt_eq_getEventAt`. -/
+public
+theorem _root_.DY.Trace.StateStoredAt_eq_getStateAt
+  {StateT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (State.ExecEntryT StateT)]
+  (st: StateT) (i: Nat) (tr: ExecTrace)
+  : tr.StateStoredAt st i = (tr.getStateAt StateT i = some st)
+:= by
+  dsimp only [Trace.StateStoredAt, Trace.getStateAt]
+  grind [cases State.ExecEntryT]
+
+@[expose, grind]
+public
+def _root_.DY.Trace.StateStored
+  {StateT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (State.ExecEntryT StateT)]
+  (st: StateT)
+  (tr: ExecTrace)
+  : Prop
+:=
+  ∃ i, tr.StateStoredAt st i
+
+public
+theorem _root_.DY.Trace.StateStored_le
+  {StateT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (State.ExecEntryT StateT)]
+  (st: StateT)
+  (tr1 tr2: ExecTrace)
+  : tr1 ≤ tr2 →
+    tr1.StateStored st →
+    tr2.StateStored st
+:= by
+  grind [Trace.StateStoredAt]
+
+grind_pattern DY.Trace.StateStored_le => tr1 ≤ tr2, tr1.StateStored st
+grind_pattern [grind_later] DY.Trace.StateStored_le => tr1 ≤ tr2, tr1.StateStored st
+
 end Execution
 
 section Proof
@@ -136,6 +250,49 @@ theorem getGlobalState.spec
   step
   grind
 
+/-- A stored state entry yields its `GlobalStateInv` at the position it sits at.
+
+The state counterpart of `Trace.EventLoggedAt_imp_EventInv`, and the only route
+from an ExecTrace reading of a store to the ProofTrace fact the store's invariant
+records. Available because `State.ProofEntryT` is a `ProofEntryT` abbreviation of
+`State.ExecEntryT` with the default (identity) erasure. -/
+public
+theorem _root_.DY.Trace.StateStoredAt_imp_StateInv
+  {StateT: Type}
+  [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  [GlobalStateInv StateT]
+  [ExecTraceTypes.Has (State.ExecEntryT StateT)] [ProofTraceTypes.Has (State.ProofEntryT StateT)] [TraceInvariant.Has (State.ProofEntryT StateT)]
+  (st: StateT)
+  (i: Nat)
+  (tr: ProofTrace)
+  : tr.Invariant →
+    tr.erase.StateStoredAt st i →
+    GlobalStateInv.invariant st (tr.prefix i)
+:= by
+  intro h_inv h_st
+  have := Trace.invariant_at tr i (by grind [Trace.StateStoredAt]) h_inv
+  suffices SubTraceInvariant.invariant (tr.prefix i) (State.ExecEntryT.mk st) by
+    simp_all [SubTraceInvariant.invariant]
+  rewrite [← TraceInvariant.Has.inv_commutes]
+  simp [Trace.StateStoredAt, Trace.at?_eq_some, Trace.erase_at, ProofTrace.Entry.erase_eq_imp_exists, ErasableProofEntry.erase] at h_st
+  grind
+
+public
+theorem _root_.DY.Trace.StateStored_imp_StateInv
+  {StateT: Type}
+  [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  [GlobalStateInv StateT]
+  [ExecTraceTypes.Has (State.ExecEntryT StateT)] [ProofTraceTypes.Has (State.ProofEntryT StateT)] [TraceInvariant.Has (State.ProofEntryT StateT)]
+  (st: StateT)
+  (tr: ProofTrace)
+  : tr.Invariant →
+    tr.erase.StateStored st →
+    ∃ i, GlobalStateInv.invariant st (tr.prefix i)
+:= by
+  intro h_inv h_st
+  obtain ⟨i, h_at⟩ := h_st
+  exact ⟨i, Trace.StateStoredAt_imp_StateInv st i tr h_inv h_at⟩
+
 end Proof
 
 end State
@@ -172,6 +329,9 @@ def compromise
   ProtocolEvent.logEvent ({ state }: Compromise.CompromiseEvent StateT)
   Network.sendMessage (Comparse.serialize state)
 
+-- An abbreviation for the event the compromise logs, so a reader outside this
+-- module can see it is one.
+@[expose]
 public
 def GlobalStateCompromised
   {StateT: Type}
@@ -204,22 +364,62 @@ section Proof
 
 namespace Compromise
 
+-- The leaked state satisfied its owner's invariant at the moment it leaked;
+-- `compromise` reads it through `getGlobalState`, whose post supplies exactly
+-- this. Without it a compromise is unreadable and a caller can learn nothing
+-- about WHOSE state leaked.
 public
 instance
   {StateT: Type}
-  [ExecTraceTypes] [ProofTraceTypes]
+  [ExecTraceTypes] [ProofTraceTypes] [GlobalStateInv StateT]
   : ProtocolEvent.EventInv (CompromiseEvent StateT)
 where
-  invariant _ _ := True
+  invariant tr ev := GlobalStateInv.invariant ev.state tr
 
 #combine (StateT: Type) into
   ProofEntryT,
+from
+  ProtocolEvent (Compromise.CompromiseEvent StateT)
+
+-- Only the *invariant* instance needs the protocol's state invariant; the entry
+-- type itself must stay free of it, or the whole trace-type stack would become
+-- indexed by the invariant.
+#combine (StateT: Type) [ExecTraceTypes] [ProofTraceTypes] [GlobalStateInv StateT] into
   SubTraceInvariant,
+from
+  ProtocolEvent (Compromise.CompromiseEvent StateT)
+
+#combine (StateT: Type) [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  [BytesFunctor] [BytesInvariants] [GlobalStateInv StateT] into
   SubBaseAttackerKnowledgeTheorem,
 from
   ProtocolEvent (Compromise.CompromiseEvent StateT)
 
 end Compromise
+
+/-- A compromised state satisfied its invariant at the moment it leaked.
+
+The dual of `label_isCorrupt`: that says WHEN a state's label is corrupt, this
+says WHAT is known about the state once it is. Callers need it whenever the
+compromise label is exec-level (so it can name no more than the bytes) but the
+guarantee has to name the principal or the provenance the invariant records. -/
+public
+theorem GlobalStateCompromised_imp_invariant
+  {StateT: Type}
+  [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  [GlobalStateInv StateT]
+  [ExecTraceTypes.Has (Compromise.ExecEntryT StateT)]
+  [ProofTraceTypes.Has (Compromise.ProofEntryT StateT)]
+  [TraceInvariant.Has (Compromise.ProofEntryT StateT)]
+  (state: StateT)
+  (tr: ProofTrace)
+  : tr.Invariant →
+    GlobalStateCompromised state tr.erase →
+    ∃ i, GlobalStateInv.invariant state (tr.prefix i)
+:= by
+  intro h_inv h_comp
+  exact Trace.EventLogged_imp_EventInv ({ state }: Compromise.CompromiseEvent StateT)
+    tr h_inv h_comp
 
 public
 def label
@@ -289,7 +489,9 @@ theorem compromise.spec
   apply HoareTriple.mk
   unfold compromise
   step
-  step by simp [ProtocolEvent.EventInv.invariant]
+  -- The event now carries the leaked state's invariant; `getGlobalState` above
+  -- supplies it.
+  step by simp_all [ProtocolEvent.EventInv.invariant]
   step by
     have := CompromisableGlobalStateInv.invariant_implies_KnowableBy state tr
     have : (label state).isCorrupt tr.erase := by simp_all [label, ProtocolEvent.label_isCorrupt]
@@ -314,6 +516,7 @@ namespace CompromisableState
 
 #combine
   (StateT: Type)
+  [ExecTraceTypes] [ProofTraceTypes]
   [BytesFunctor] [BytesInvariants] [BytesLength]
   [BytesFunctor.Has Literal.SubF] [BytesLength.Has Literal.SubF.length]
   [BytesFunctor.Has Concat.SubF] [BytesLength.Has Concat.SubF.length]
@@ -322,6 +525,20 @@ namespace CompromisableState
   [CompromisableGlobalStateInv StateT]
 into
   SubTraceInvariant,
+from
+  State StateT,
+  Compromise StateT,
+
+#combine
+  (StateT: Type)
+  [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  [BytesFunctor] [BytesInvariants] [BytesLength]
+  [BytesFunctor.Has Literal.SubF] [BytesLength.Has Literal.SubF.length]
+  [BytesFunctor.Has Concat.SubF] [BytesLength.Has Concat.SubF.length]
+  [Comparse.ParseableSerializeable StateT]
+  [ExecTraceTypes.Has (ExecEntryT StateT)]
+  [CompromisableGlobalStateInv StateT]
+into
   SubBaseAttackerKnowledgeTheorem__noExecHas,
 from
   State StateT,
