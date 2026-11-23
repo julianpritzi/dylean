@@ -470,6 +470,44 @@ theorem Container.view_pack
   unfold view pack
   simp [Container.intoFunctor_fromFunctor, Representable.from_to, SubFunctorTC.proj_inj]
 
+/-- CROSS-SUB-FUNCTOR DISJOINTNESS. Viewing at `f` a term that was packed at a
+DIFFERENT sub-functor `f'` yields `none`, provided the two injections into the
+carrier are distinguishable. `Container.view_pack` only covers `f = f'`, so
+without this a deployment cannot rule out that (say) a literal parses as a
+concatenation. -/
+public
+theorem Container.view_pack_ne
+  (f: Type → Type) {f' g: Type → Type}
+  [FunctorSizeOf f] [FunctorSizeOf f'] [FunctorSizeOf g]
+  [SubFunctorTC f g] [SubFunctorTC f' g] [Representable g]
+  (x: f' (ContainerFor g))
+  (hne: ∀ y: f (ContainerFor g),
+    (SubFunctorTC.inj y: g (ContainerFor g)) ≠ SubFunctorTC.inj x)
+  : view f (pack f' x) = none
+:= by
+  unfold view pack
+  rewrite [Container.intoFunctor_fromFunctor, Representable.from_to]
+  cases h_proj: SubFunctorTC.proj (f := f) (g := g) (SubFunctorTC.inj (f := f') (g := g) x) with
+  | none => rfl
+  | some y =>
+    exfalso
+    have h_inj := SubFunctorTC.inj_proj (f := f) (g := g)
+      (SubFunctorTC.inj (f := f') (g := g) x)
+    rewrite [h_proj] at h_inj
+    exact hne y h_inj
+
+/-- The `FunctorUnion` tag discharges the `hne` side condition of
+`Container.view_pack_ne`: distinct members inject to records with distinct
+`id` fields. -/
+public
+theorem FunctorUnion.inj_ne
+  {a: Type} [DecidableEq a] (Functors: a → (Type → Type))
+  [∀ id, FunctorSizeOf (Functors id)]
+  {id1 id2: a} (h_id: id1 ≠ id2) {t: Type}
+  (x: Functors id1 t) (y: Functors id2 t)
+  : (SubFunctor.inj x: FunctorUnion Functors t) ≠ SubFunctor.inj y
+:= fun h_eq => h_id (congrArg FunctorUnion.id h_eq)
+
 public
 theorem Container.pack_view
   (f: Type → Type) {g: Type → Type}

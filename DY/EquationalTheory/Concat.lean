@@ -97,6 +97,113 @@ theorem concat_split
   simp only [concat, split]
   grind
 
+/-- Index-free top-level destructor: recover a `concat`'s two operands without
+    knowing where the boundary lies. `split` requires the left operand's length,
+    which a caller inspecting an otherwise-opaque term does not have. This is
+    what a usage rule peeling a *labelled* ikm needs -- see
+    `Crypto.KDF.UsageConfig.ikmNaming`, where a protocol reads the usage of a
+    sub-term of its own key-schedule input. Returns `none` on any term that is
+    not a `concat`. -/
+public
+def unconcat? (b: Bytes) : Option (Bytes × Bytes) :=
+  match b.view? Concat.SubF with
+  | some ({ lhs, rhs }) => some (lhs, rhs)
+  | none => none
+
+public
+theorem unconcat?_concat (lhs rhs: Bytes)
+  : unconcat? (concat lhs rhs) = some (lhs, rhs)
+:= by
+  simp only [unconcat?, concat]
+  grind
+
+/-- `unconcat?` bottoms out on any term that does not view as a `concat`. The
+    hypothesis is normally supplied by `BytesView.view_pack_ne`, which is how a
+    deployment shows that (say) a string literal is not a concatenation. -/
+public
+theorem unconcat?_of_view?_none (b: Bytes) (h: b.view? Concat.SubF = none)
+  : unconcat? b = none
+:= by
+  simp only [unconcat?, h]
+
+public
+theorem concat_unconcat? (b lhs rhs: Bytes)
+  : unconcat? b = some (lhs, rhs) → concat lhs rhs = b
+:= by
+  simp only [unconcat?, concat]
+  grind
+
+/-- `concat` is injective in both operands, since `unconcat?` recovers them.
+    A term that is a `concat` therefore has exactly ONE top-level split, which is
+    what lets a property stated over *all* splits of a buffer be discharged from
+    the one split its builder used. -/
+public
+theorem concat_inj {lhs rhs lhs' rhs': Bytes}
+  (h: concat lhs rhs = concat lhs' rhs')
+  : lhs = lhs' ∧ rhs = rhs'
+:= by
+  have h1 := unconcat?_concat lhs rhs
+  rw [h, unconcat?_concat] at h1
+  simp only [Option.some.injEq, Prod.mk.injEq] at h1
+  exact ⟨h1.1.symm, h1.2.symm⟩
+
+/-- The operands of a `concat` are genuine sub-terms, so a selector built from
+    `unconcat?` satisfies `UsageConfig.ikmNaming_size`. -/
+public
+theorem sizeOf_concat (lhs rhs: Bytes)
+  : sizeOf lhs + sizeOf rhs ≤ sizeOf (concat lhs rhs)
+:= by
+  have h := Bytes.sizeOf_view Concat.SubF (concat lhs rhs)
+  rw [show (concat lhs rhs).view? Concat.SubF = some ({lhs, rhs}: Concat.SubF Bytes) from
+    BytesView.view_pack _] at h
+  simpa [ALaCarte.FunctorSizeOf.sizeOf] using h
+
+public
+theorem sizeOf_unconcat? (b lhs rhs: Bytes)
+  : unconcat? b = some (lhs, rhs) → sizeOf lhs + sizeOf rhs ≤ sizeOf b
+:= by
+  intro h
+  rw [← concat_unconcat? b lhs rhs h]
+  exact sizeOf_concat lhs rhs
+
+/-- Peel one `concat` layer, keeping the right operand (the payload). This is
+    the single step a labelled-KDF naming rule iterates -- see
+    `Crypto.KDF.UsageConfig.ikmNaming`. It is total: a term that is not a
+    `concat` is returned unchanged, so no rule built from it can fail. -/
+public
+def unconcatR (b: Bytes) : Bytes :=
+  match unconcat? b with
+  | some (_, r) => r
+  | none => b
+
+@[simp]
+public
+theorem unconcatR_concat (lhs rhs: Bytes)
+  : unconcatR (concat lhs rhs) = rhs
+:= by
+  simp only [unconcatR, unconcat?_concat]
+
+/-- The other half of `unconcatR`'s totality: a term that is not a `concat` is
+    returned unchanged. A naming rule that peels a fixed number of layers needs
+    this to argue that a protocol passing an *unwrapped* keying material through
+    the same `ikmNaming` selector still names itself. -/
+public
+theorem unconcatR_of_unconcat?_none (b: Bytes) (h: unconcat? b = none)
+  : unconcatR b = b
+:= by
+  simp only [unconcatR, h]
+
+public
+theorem sizeOf_unconcatR (b: Bytes)
+  : sizeOf (unconcatR b) ≤ sizeOf b
+:= by
+  unfold unconcatR
+  split
+  · next l r hv =>
+    have := sizeOf_unconcat? b l r hv
+    omega
+  · exact Nat.le_refl _
+
 @[simp]
 public
 theorem length_concat
@@ -227,6 +334,24 @@ theorem concat.WellFormed
 := by
   simp [concat, Bytes.WellFormed.eq, Concat.invariants]
 
+/-- Well-formedness descends through a peel. This is what a naming rule needs in
+    order to take the *usage* of a peeled sub-term: `usage_later` may only appeal
+    to the structural recursor at sub-terms that are well-formed at the earlier
+    trace (see `Crypto.KDF.UsageConfigProof.ikmNaming_wf`). -/
+public
+theorem unconcatR.WellFormed
+  [BytesWellFormed] [BytesWellFormed.Has Concat.invariants.well_formed]
+  (b: Bytes) (tr: ProofTrace)
+  : b.WellFormed tr → (unconcatR b).WellFormed tr
+:= by
+  intro h
+  unfold unconcatR
+  split
+  · next l r hv =>
+    rw [← concat_unconcat? b l r hv, concat.WellFormed] at h
+    exact h.2
+  · exact h
+
 @[simp]
 public
 theorem concat.label
@@ -235,6 +360,25 @@ theorem concat.label
   : (concat lhs rhs).label tr = Label.meet (lhs.label tr) (rhs.label tr)
 := by
   simp [concat, Bytes.label.eq, Concat.invariants]
+
+/-- Concatenation carries **no** usage: a `concat` term is never a named key.
+
+    This is the accessor form of `Concat.invariants.usage`, and it is worth
+    stating explicitly because it is a real constraint on protocol usage rules,
+    not a triviality. Any rule that tries to read a name out of a *labeled*
+    construction — RFC 9180's `LabeledExtract(salt, label, ikm)`, whose `ikm`
+    argument is `concat("HPKE-v1", suite_id, label, ikm)` — reads this
+    `Usage.nothing` instead of the underlying secret's usage. A naming chain
+    that has to pass through a `concat` is therefore severed here, silently,
+    with no proof failing. -/
+@[simp]
+public
+theorem concat.usage
+  [BytesInvariants] [BytesInvariants.Has invariants]
+  (lhs rhs: Bytes) (tr: ProofTrace)
+  : (concat lhs rhs).usage tr = Usage.nothing
+:= by
+  simp [concat, Bytes.usage.eq, Concat.invariants]
 
 @[simp]
 public

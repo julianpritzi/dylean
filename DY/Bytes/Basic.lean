@@ -149,6 +149,26 @@ theorem BytesView.view_pack
 
 grind_pattern BytesView.view_pack => b.pack
 
+/-- CROSS-SUB-FUNCTOR DISJOINTNESS at the `Bytes` level: a term packed at
+`SubF2` does NOT view as a different `SubF1`, provided the two injections into
+the byte algebra's carrier are distinguishable. `BytesView.view_pack` only
+covers `SubF1 = SubF2`, so without this a deployment cannot rule out that (say)
+a literal parses as a concatenation. Discharge `h_ne` with
+`ALaCarte.FunctorUnion.inj_ne`. -/
+public
+theorem BytesView.view_pack_ne
+  (SubF1: Type → Type) {SubF2: Type → Type}
+  [SubBytesFunctor SubF1] [SubBytesFunctor SubF2]
+  [BytesFunctor.Has SubF1] [BytesFunctor.Has SubF2]
+  (b: BytesView SubF2)
+  (h_ne: ∀ y: BytesView SubF1,
+    (ALaCarte.SubFunctorTC.inj (f := SubF1) (g := BytesF) y: BytesF Bytes)
+      ≠ ALaCarte.SubFunctorTC.inj (f := SubF2) (g := BytesF) b)
+  : (b.pack).view? SubF1 = none
+:= by
+  simp only [BytesView.pack, Bytes.view?]
+  exact ALaCarte.Container.view_pack_ne SubF1 b h_ne
+
 public
 theorem Bytes.sizeOf_view
   (SubF: Type → Type) [SubBytesFunctor SubF] [BytesFunctor.Has SubF]

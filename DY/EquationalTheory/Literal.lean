@@ -98,6 +98,24 @@ theorem literalToBytes_bytesToLiteral
   simp only [bytesToLiteral, literalToBytes]
   grind
 
+/-- A literal is NOT a member of any OTHER sub-functor of the byte algebra.
+    A deployment needs this to argue that a fixed KDF `info` string cannot be
+    parsed as a structured term, hence that a rule keyed on such a parse leaves
+    the string's expansion alone. Discharge `h_ne` with
+    `ALaCarte.FunctorUnion.inj_ne`. -/
+public
+theorem literalToBytes_view?_ne
+  [BytesFunctor] [BytesFunctor.Has SubF]
+  (SubF2: Type → Type) [SubBytesFunctor SubF2] [BytesFunctor.Has SubF2]
+  (lit: ByteArray)
+  (h_ne: ∀ (y: BytesView SubF2) (x: BytesView Literal.SubF),
+    (ALaCarte.SubFunctorTC.inj (f := SubF2) (g := BytesF) y: BytesF Bytes)
+      ≠ ALaCarte.SubFunctorTC.inj (f := Literal.SubF) (g := BytesF) x)
+  : (literalToBytes lit: Bytes).view? SubF2 = none
+:= by
+  show (BytesView.pack ({ lit }: Literal.SubF Bytes)).view? SubF2 = none
+  exact BytesView.view_pack_ne SubF2 _ (fun y => h_ne y _)
+
 @[simp]
 public
 theorem length_literalToBytes
@@ -181,6 +199,20 @@ theorem literalToBytes.label
   : (literalToBytes lit: Bytes).label tr = Label.pub
 := by
   simp [literalToBytes, Bytes.label.eq, Literal.invariants]
+
+/-- A literal carries **no name**. Protocol key-separation arguments need this
+in the negative direction: a composed deployment whose `KDF.UsageConfig` guards
+on a parent's `Usage.tag` must show that a key schedule seeded from a literal
+(an `Extract` under an empty or constant salt, say) cannot pick up another
+protocol's tag. -/
+@[simp]
+public
+theorem literalToBytes.usage
+  [BytesInvariants] [BytesInvariants.Has invariants]
+  (lit: ByteArray) (tr: ProofTrace)
+  : (literalToBytes lit: Bytes).usage tr = Usage.nothing
+:= by
+  simp [literalToBytes, Bytes.usage.eq, Literal.invariants]
 
 @[simp]
 public
