@@ -99,8 +99,22 @@ abbrev SubF.length [BytesFunctor]: Bytes.PartialLength SubF := Random.length
 public
 abbrev Random.pack [BytesFunctor] [BytesFunctor.Has SubF] (x: Random Bytes) := BytesView.pack x
 
+public
 def makeRand [BytesFunctor] [BytesFunctor.Has SubF] (timestamp size: Nat): Bytes :=
   ({timestamp, size}: Random Bytes).pack
+
+/-- The byte-length of a freshly drawn `makeRand` term is exactly its `size`
+    field (`Random.length`), independent of the timestamp. An unsized fact about
+    the flat `Bytes` term -- the sized (`SBytes`) wrapper that consumes it lives
+    in the `Crypto` layer, not here. -/
+@[simp]
+public
+theorem length_makeRand
+  [BytesFunctor] [BytesFunctor.Has SubF] [BytesLength] [BytesLength.Has SubF.length]
+  (timestamp size: Nat)
+  : Bytes.length (makeRand timestamp size) = size
+:= by
+  simp [makeRand, Random.pack, Bytes.length.eq, Random.length]
 
 end Constructors
 
@@ -164,6 +178,7 @@ abbrev invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs invaria
 
 variable [BytesInvariants] [BytesInvariants.Has invariants]
 
+public
 theorem makeRand.Invariant
   (timestamp size: Nat) (tr: ProofTrace)
   (label: Label) (usage: Usage)

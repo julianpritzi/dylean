@@ -113,6 +113,24 @@ theorem _root_.DY.Trace.EventLoggedAt_le
 grind_pattern Trace.EventLoggedAt_le => tr1 ≤ tr2, tr1.EventLoggedAt ev time
 grind_pattern [grind_later] Trace.EventLoggedAt_le => tr1 ≤ tr2, tr1.EventLoggedAt ev time
 
+/-- An event stays where it is when the run is cut back past it. The converse of
+    `EventLoggedAt_le`, for reasoning about a truncation of a trace. -/
+public
+theorem _root_.DY.Trace.EventLoggedAt_prefix
+  {EventT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (ExecEntryT EventT)]
+  (ev: EventT) (i n: Nat)
+  (tr: ExecTrace)
+  (h_i: i < n) (h_n: n ≤ tr.length)
+  : tr.EventLoggedAt ev i →
+    (tr.prefix n).EventLoggedAt ev i
+:= by
+  intro h
+  unfold Trace.EventLoggedAt at h ⊢
+  rw [Trace.at?_prefix tr i n h_i h_n]
+  exact h
+
 @[grind]
 public
 def _root_.DY.Trace.EventLogged
@@ -124,6 +142,17 @@ def _root_.DY.Trace.EventLogged
   : Prop
 :=
   ∃ i, tr.EventLoggedAt ev i
+
+/-- `EventLogged` unfolded. The body is not exposed, so a caller outside this
+    module cannot name the position an event was logged at without this. -/
+public
+theorem _root_.DY.Trace.EventLogged_iff
+  {EventT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (ExecEntryT EventT)]
+  (ev: EventT) (tr: ExecTrace)
+  : tr.EventLogged ev ↔ ∃ i, tr.EventLoggedAt ev i
+:= Iff.rfl
 
 public
 theorem _root_.DY.Trace.EventLogged_le
@@ -140,6 +169,34 @@ theorem _root_.DY.Trace.EventLogged_le
 
 grind_pattern Trace.EventLogged_le => tr1 ≤ tr2, tr1.EventLogged ev
 grind_pattern [grind_later] Trace.EventLogged_le => tr1 ≤ tr2, tr1.EventLogged ev
+
+/-- The body of `EventLogged` is not exposed, so `obtain ⟨i, _⟩` on one fails
+    outside this module, and neither does `⟨i, h⟩` build one. Anything positioned
+    against where an event happened needs to cross that line in both directions. -/
+public
+theorem _root_.DY.Trace.EventLogged_imp_EventLoggedAt
+  {EventT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (ExecEntryT EventT)]
+  (ev: EventT)
+  (tr: ExecTrace)
+  : tr.EventLogged ev →
+    ∃ i, tr.EventLoggedAt ev i
+:= by
+  grind [Trace.EventLogged]
+
+public
+theorem _root_.DY.Trace.EventLoggedAt_imp_EventLogged
+  {EventT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (ExecEntryT EventT)]
+  (ev: EventT)
+  (i: Nat)
+  (tr: ExecTrace)
+  : tr.EventLoggedAt ev i →
+    tr.EventLogged ev
+:= by
+  grind [Trace.EventLogged]
 
 public
 theorem _root_.DY.Trace.EventLoggedAt_imp_EventInv
@@ -163,6 +220,22 @@ theorem _root_.DY.Trace.EventLoggedAt_imp_EventInv
   grind
 
 public
+theorem _root_.DY.Trace.EventLogged_imp_EventInv
+  {EventT: Type}
+  [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  [EventInv EventT]
+  [ExecTraceTypes.Has (ExecEntryT EventT)] [ProofTraceTypes.Has (ProofEntryT EventT)] [TraceInvariant.Has (ProofEntryT EventT)]
+  (ev: EventT)
+  (tr: ProofTrace)
+  : tr.Invariant →
+    tr.erase.EventLogged ev →
+    ∃ i, EventInv.invariant (tr.prefix i) ev
+:= by
+  intro h_inv h_ev
+  obtain ⟨i, h_at⟩ := h_ev
+  exact ⟨i, Trace.EventLoggedAt_imp_EventInv ev i tr h_inv h_at⟩
+
+public
 def logEvent
   {EventT: Type}
   [ExecTraceTypes]
@@ -172,6 +245,30 @@ def logEvent
   let entry: ExecEntryT EventT := { ev }
   let _i ← appendEntry entry
   return ()
+
+public
+theorem logEvent_run_val
+  {EventT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (ExecEntryT EventT)]
+  (ev: EventT) (tr: ExecTrace)
+  : (Traceful.run (logEvent ev) tr).2.val = tr.append (ExecEntryT.mk ev)
+:= by
+  show (Traceful.run (appendEntry (ExecEntryT.mk ev) >>= fun _ => pure ()) tr).2.val
+     = tr.append (ExecEntryT.mk ev)
+  rw [run_bind_const_pure_snd_val, appendEntry_run_snd_val]
+
+public
+theorem logEvent_run_fst
+  {EventT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (ExecEntryT EventT)]
+  (ev: EventT) (tr: ExecTrace)
+  : (Traceful.run (logEvent ev) tr).1 = some ()
+:= by
+  show (Traceful.run (appendEntry (ExecEntryT.mk ev) >>= fun _ => pure ()) tr).1 = some ()
+  rw [run_bind_const_pure_fst, appendEntry_run_fst]
+  rfl
 
 @[instance]
 public
