@@ -50,7 +50,7 @@ class TraceEntryHas (EntryT: Type) (α: Type) where
   proj: α → Option EntryT
   inj_proj_eq: ∀ x y, (proj x = some y) = (x = inj y)
 
-public
+@[expose] public
 def Trace.append
   {EntryT α: Type} [TraceEntryHas EntryT α]
   (tr: Trace α) (entry: EntryT)
@@ -68,10 +68,24 @@ def Trace.append_le
   apply Trace.le.equal
 
 public
+theorem Trace.append_eq_snoc
+  {EntryT α: Type} [TraceEntryHas EntryT α]
+  (tr: Trace α) (entry: EntryT)
+  : tr.append entry = Trace.snoc tr (TraceEntryHas.inj entry)
+:= rfl
+
+public
 def Trace.length {α: Type} (tr: Trace α) : Nat :=
   match tr with
   | .nil => 0
   | .snoc trBefore _ => trBefore.length + 1
+
+@[simp, grind =]
+public
+theorem Trace.length_nil
+  {α: Type}
+  : (Trace.nil : Trace α).length = 0
+:= by simp [Trace.length]
 
 public
 theorem Trace.length_le
@@ -117,6 +131,33 @@ theorem Trace.prefix_eq
 := by
   unfold Trace.prefix
   simp
+
+public
+theorem Trace.prefix_length_le
+  {α : Type}
+  (tr : Trace α)
+  (i : Nat)
+  : (tr.prefix i).length ≤ i
+:= by
+  fun_induction Trace.prefix <;> simp_all [Trace.length]
+
+/-- Truncating to a length the shorter trace already reaches cannot tell the two
+    apart. Used to move a claim about a trace onto a reachable truncation of it. -/
+public
+theorem Trace.prefix_of_le
+  {α: Type} {tr1 tr2: Trace α}
+  (h: tr1 ≤ tr2)
+  : ∀ n, n ≤ tr1.length → tr2.prefix n = tr1.prefix n
+:= by
+  induction h with
+  | equal => intro n _; rfl
+  | extend b e hab ih =>
+    intro n hn
+    have hlen := Trace.length_le _ _ hab
+    have hne : n ≠ (Trace.snoc b e).length := by grind [Trace.length]
+    rw [Trace.prefix]
+    simp only [hne, if_false]
+    exact ih n hn
 
 public
 def Trace.at {α: Type} (tr: Trace α) (i: Nat) (h_i: i < tr.length): α :=
@@ -194,6 +235,30 @@ theorem Trace.at?_eq_some_implies_length_le
   grind [Trace.at?]
 
 grind_pattern Trace.at?_eq_some_implies_length_le => (tr.at? i: Option EntryT)
+
+/-- A truncation long enough to reach `n` has exactly that length. -/
+public
+theorem Trace.length_prefix
+  {α: Type} (tr: Trace α) (n: Nat)
+  : n ≤ tr.length → (tr.prefix n).length = n
+:= by
+  fun_induction Trace.prefix <;> grind [Trace.length]
+
+/-- Truncating past a position leaves what is at that position alone, so an
+    event still sits where it did. -/
+public
+theorem Trace.at?_prefix
+  {EntryT α: Type} [TraceEntryHas EntryT α]
+  (tr: Trace α) (i n: Nat)
+  (h_i: i < n) (h_n: n ≤ tr.length)
+  : ((tr.prefix n).at? i: Option EntryT) = tr.at? i
+:= by
+  have hlen := Trace.length_prefix tr n h_n
+  have h1 : i < (tr.prefix n).length := by omega
+  have h2 : i < tr.length := by omega
+  unfold Trace.at?
+  simp only [h1, h2, dif_pos]
+  rw [Trace.at_le (tr.prefix n) tr i h1 (Trace.prefix_le tr n)]
 
 -- Execution trace
 

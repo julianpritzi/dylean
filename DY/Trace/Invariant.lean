@@ -451,6 +451,23 @@ theorem Trace.invariant_at
   fun_induction Trace.at <;>
   grind [Trace.Invariant, Trace.prefix, Trace.length]
 
+public
+theorem Trace.invariant_prefix
+  [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  (tr: ProofTrace)
+  (i: Nat)
+  : tr.Invariant →
+    (tr.prefix i).Invariant
+:= by
+  induction tr with
+  | nil => simp [Trace.prefix, Trace.Invariant]
+  | snoc trBefore entry ih =>
+    intro h
+    unfold Trace.prefix
+    split
+    · exact h
+    · exact ih (by grind [Trace.Invariant])
+
 namespace Meta.CombineMacro
 
 macro_rules

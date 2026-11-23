@@ -84,6 +84,34 @@ inductive Trace.Reachable (config: ReachabilityConfig): ExecTrace → Prop where
     Trace.Reachable config tr →
     Trace.Reachable config (((config.step input).snd).run tr).snd
 
+/-- Every position of a reachable trace lies inside a reachable truncation of
+    it: the run could have stopped at the step boundary just after that point.
+
+    A step can only extend the trace -- `Traceful` carries `trIn ≤ trOut` in its
+    type -- so the truncation is reachable by the same steps. This is what lets
+    a guarantee stated over the whole trace be read as a guarantee that already
+    holds by the time its trigger occurs. -/
+public
+theorem Trace.Reachable.exists_prefix_containing
+  {config: ReachabilityConfig} {tr: ExecTrace}
+  (h: tr.Reachable config)
+  : ∀ i, i < tr.length →
+      ∃ n, i < n ∧ n ≤ tr.length ∧ (tr.prefix n).Reachable config
+:= by
+  induction h with
+  | Base => intro i hi; rw [Trace.length_nil] at hi; omega
+  | @Step tr0 input hpre hreach ih =>
+    intro i hi
+    have hle := ((((config.step input).snd).run tr0).snd).property
+    by_cases hlt : i < tr0.length
+    · obtain ⟨n, hin, hnle, hn⟩ := ih i hlt
+      refine ⟨n, hin, Nat.le_trans hnle (Trace.length_le _ _ hle), ?_⟩
+      rw [Trace.prefix_of_le hle n hnle]
+      exact hn
+    · refine ⟨_, hi, Nat.le_refl _, ?_⟩
+      rw [Trace.prefix_eq]
+      exact Trace.Reachable.Step input hpre hreach
+
 -- Weakest Precondition
 @[expose]
 public

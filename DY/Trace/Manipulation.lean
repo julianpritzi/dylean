@@ -244,6 +244,20 @@ theorem Traceful.finish_wp
     grind
 
 public
+theorem Traceful.pure_wp
+  [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
+  {a}
+  (x: a)
+  (post: a -> ProofTrace -> Prop)
+  (tr: ProofTrace)
+  (pf_tr_inv: Trace.Invariant tr)
+  (pf_post: post x tr)
+  : WP.wp (pure x : Traceful a) post tr
+  := by
+    simp only [WP.wp, Traceful.run_pure]
+    exact ⟨tr, pf_post, pf_tr_inv, rfl, Trace.le_refl tr⟩
+
+public
 class HoareTriplePureGhost [ExecTraceTypes] [ProofTraceTypes] (x: a) [HasGhostArgumentType x g] (ghost: g) (pre: outParam (ProofTrace → Prop)) (post: outParam (a → ProofTrace → Prop)) where
   pf: ∀ tr, pre tr → post x tr
 
@@ -414,6 +428,42 @@ theorem appendEntry.spec
   simp_all [Trace.append_erase, Trace.append_le, Trace.invariant_append, Trace.at?_append, Trace.erase_length]
 
 public
+theorem appendEntry_run_snd_val
+  [ExecTraceTypes] {EntryT: Type} [ExecTraceTypes.Has EntryT]
+  (entry: EntryT) (tr: ExecTrace)
+  : (Traceful.run (appendEntry entry) tr).2.val = tr.append entry
+:= by
+  simp only [appendEntry, Traceful.run_mk]
+
+public
+theorem appendEntry_run_fst
+  [ExecTraceTypes] {EntryT: Type} [ExecTraceTypes.Has EntryT]
+  (entry: EntryT) (tr: ExecTrace)
+  : (Traceful.run (appendEntry entry) tr).1 = some tr.length
+:= by
+  simp only [appendEntry, Traceful.run_mk]
+
+public
+theorem run_bind_const_pure_snd_val
+  [ExecTraceTypes] {a b: Type} (x: Traceful a) (v: b) (tr: ExecTrace)
+  : (Traceful.run (x >>= fun _ => pure v) tr).2.val = (Traceful.run x tr).2.val
+:= by
+  rw [Traceful.run_bind]
+  generalize Traceful.run x tr = rx
+  obtain ⟨opt_x, tr_x⟩ := rx
+  cases opt_x <;> simp [Traceful.run_pure]
+
+public
+theorem run_bind_const_pure_fst
+  [ExecTraceTypes] {a b: Type} (x: Traceful a) (v: b) (tr: ExecTrace)
+  : (Traceful.run (x >>= fun _ => pure v) tr).1 = ((Traceful.run x tr).1).map (fun _ => v)
+:= by
+  rw [Traceful.run_bind]
+  generalize Traceful.run x tr = rx
+  obtain ⟨opt_x, tr_x⟩ := rx
+  cases opt_x <;> simp [Traceful.run_pure]
+
+public
 def getEntry
   [ExecTraceTypes] {EntryT: Type} [ExecTraceTypes.Has EntryT]
   (timestamp: Nat)
@@ -491,7 +541,7 @@ theorem getTimestamp.spec [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]:
   HoareTriple
     (getTimestamp)
     (fun _ => True)
-    (fun _ _ => True)
+    (fun t tr => t = tr.length)
 := by
   apply HoareTriple.mk
   simp [hoareTriple, wp, getTimestamp, Traceful.run_mk]
