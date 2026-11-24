@@ -33,19 +33,19 @@ def honestAttacker: Traceful Unit := do
   Client.checkInclusion "Bob" msgSigHandle msgInclHandle pkHandle -- 1
   return ()
 
+-- Future work: we could design a step-like tactic to automate this proof
 theorem honestAttacker_PreservesReachability
   : honestAttacker.PreservesReachability reachability (fun _ => True) (fun _ _ => True)
 := by
   unfold Traceful.PreservesReachability
   intro tr h_tr h_pre
-  dsimp only [honestAttacker]
+  unfold honestAttacker
 
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (LongTermKeys.generateKeyPair.reachability "MerkleTree PKI")
   · assumption
   · simp [LongTermKeys.generateKeyPair.reachability]
   intro ⟨ _, pkHandle, skHandle ⟩ tr h_post h_tr h_le
-  dsimp only
 
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (Network.reachability)
@@ -82,7 +82,6 @@ theorem honestAttacker_PreservesReachability
   · assumption
   · simp [Server.authenticate.reachability]
   intro ⟨ msgSigHandle, stHandle ⟩ tr h_post h_tr h_le
-  dsimp only
 
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (Server.proveInclusion.reachability) _ ("Bob", 3, stHandle)
@@ -102,7 +101,7 @@ theorem honestAttacker_PreservesReachability
 
 public
 theorem honestAttacker_properties:
-  let tr := (honestAttacker.run (Trace.nil)).snd.val
+  let tr := (honestAttacker.run (Trace.empty)).snd.val
   tr.Reachable reachability ∧
   ∃ (t1 t2: Nat) (msg: Bytes),
     t1 < t2 ∧
@@ -146,7 +145,7 @@ def compromiseSigKeyAttacker: Traceful Unit := do
   let rootHash := merkleTreeHash (.bytes) elements
   let tbs: SignedRootHashTBS := { rootHash, length := elements.length }
   let tbsBytes: Bytes := Comparse.serialize tbs
-  let sigNonce := Literal.literalToBytes "00000000000000000000000000000000".toByteArray
+  let sigNonce ← Random.attackerGenRand 32
   let sig := Signature.sign sigKey sigNonce tbsBytes
 
   let msgSig: SignedRootHash := { tbs, sig }
@@ -162,14 +161,15 @@ def compromiseSigKeyAttacker: Traceful Unit := do
   Client.checkInclusion "Bob" msgSigHandle msgInclHandle pkHandle -- 1
   return ()
 
-#guard (compromiseSigKeyAttacker.run Trace.nil).fst = some ()
+#guard (compromiseSigKeyAttacker.run Trace.empty).fst = some ()
 
+-- Future work: we could design a step-like tactic to automate this proof
 theorem compromiseSigKeyAttacker_PreservesReachability
   : compromiseSigKeyAttacker.PreservesReachability reachability (fun _ => True) (fun _ _ => True)
 := by
   unfold Traceful.PreservesReachability
   intro tr h_tr h_pre
-  dsimp only [compromiseSigKeyAttacker]
+  unfold compromiseSigKeyAttacker
 
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (LongTermKeys.generateKeyPair.reachability "MerkleTree PKI")
@@ -196,6 +196,12 @@ theorem compromiseSigKeyAttacker_PreservesReachability
   intro globalStSigkey tr h_post h_tr h_le
 
   apply Traceful.PreservesReachabilityFrom_bind
+  · apply Random.attackerGenRand.preservesReachability
+  · grind
+  · grind
+  intro sigNonce tr h_post h_tr h_le
+
+  apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (Network.reachability)
   · assumption
   · simp only [Comparse.AttackerKnows_serialize, SignedRootHash.IsWellFormed_eq]
@@ -208,7 +214,7 @@ theorem compromiseSigKeyAttacker_PreservesReachability
       simp [Literal.attacker_knows_literalToBytes]
     apply Signature.attacker_knows_sign
     · grind
-    · apply Literal.attacker_knows_literalToBytes
+    · grind
     · simp only [Comparse.AttackerKnows_serialize, SignedRootHashTBS.IsWellFormed_eq]
       apply pred_merkleTreeHash _ _ (Bytes.AttackerKnows · tr)
       · intro b h_b
@@ -230,7 +236,6 @@ theorem compromiseSigKeyAttacker_PreservesReachability
     simp [Literal.attacker_knows_literalToBytes]
   intro msgInclHandle tr h_post h_tr h_le
 
-  dsimp
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (Client.checkInclusion.reachability) _ ("Bob", msgSigHandle, msgInclHandle, pkHandle)
   · assumption
@@ -252,7 +257,7 @@ theorem rewrite_forall_nat_into_forall_fin {P: Nat → Prop} (n: Nat) (h: ∀ i,
 
 public
 theorem compromiseSigKeyAttacker_properties:
-  let tr := (compromiseSigKeyAttacker.run (Trace.nil)).snd.val
+  let tr := (compromiseSigKeyAttacker.run (Trace.empty)).snd.val
   tr.Reachable reachability ∧
   ∃ t1 element,
     tr.EventLoggedAt (TheEvent.ClientAccept "Bob" element) t1 ∧
@@ -265,7 +270,7 @@ theorem compromiseSigKeyAttacker_properties:
   conv in (∀ t': Nat, _) =>
     rewrite [rewrite_forall_nat_into_forall_fin tr.length (by grind)]
   simp only [DY.Trace.EventLoggedAt_eq_getEventAt]
-  refine ⟨ 8, (Literal.literalToBytes "quux 4".toByteArray), ?_ ⟩
+  refine ⟨ 10, (Literal.literalToBytes "quux 4".toByteArray), ?_ ⟩
   native_decide
 
 /--

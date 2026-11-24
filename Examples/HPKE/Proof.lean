@@ -188,7 +188,7 @@ attribute [local grind] HPKEAuthEventInv
 attribute [local grind] LongTermKeys.IsLongTermPublicKey
 attribute [local grind] LongTermKeys.IsLongTermSecretKey
 
-instance deriveKey.spec (sharedSecret: Bytes)
+instance deriveKey.proof (sharedSecret: Bytes)
   : HoareTriplePure
       (deriveKey sharedSecret)
       (fun tr => sharedSecret.Invariant tr)
@@ -199,7 +199,7 @@ where
     change (deriveKey sharedSecret).Invariant tr
     simpa [deriveKey] using h_ss_inv
 
-instance deriveNonce.spec (sharedSecret: Bytes)
+instance deriveNonce.proof (sharedSecret: Bytes)
   : HoareTriplePure
       (deriveNonce sharedSecret)
       (fun tr => sharedSecret.Invariant tr)
@@ -228,7 +228,7 @@ theorem deriveKey_inj (ss1 ss2: Bytes)
   exact h2
 
 -- @[instance]
--- theorem AKEM.kemDecap.spec
+-- theorem AKEM.kemDecap.proof
 --   (skR senderPk enc: Bytes)
 --   : HoareTriple
 --       (monadLift (m := Err) (n := Traceful) (AKEM.kemDecap skR senderPk enc))
@@ -257,7 +257,7 @@ theorem deriveKey_inj (ss1 ss2: Bytes)
 --     · grind
 
 @[instance]
-theorem AEAD.aead_dec.spec
+theorem AEAD.aead_dec.proof
   (key nonce aad ct: Bytes)
   : HoareTriple
       (monadLift (m := Err) (n := Traceful) (AEAD.aead_dec key nonce aad ct))
@@ -291,7 +291,7 @@ theorem AEAD.aead_dec.spec
     · grind
 
 @[instance]
-theorem Sender.seal.spec
+theorem Sender.seal.proof
   (me recipient: Participant)
   (meSkHandle recipientPkHandle: Nat)
   : HoareTriple
@@ -370,12 +370,11 @@ theorem Sender.seal.spec
       have h_enc_pub : enc.Publishable tr := (kemPost tr (by grind) (by grind)
         ‹entropy.Invariant tr› ‹entropy.label tr = recipientPk.kemSkLabel tr›).1
       grind
-    step
     trivial
 
 
 @[instance]
-theorem Recipient.open.spec
+theorem Recipient.open.proof
   (me sender: Participant)
   (meSkHandle senderPkHandle: Nat)
   (msgHandle: Nat)
@@ -509,8 +508,8 @@ section ReachabilityImpliesInvariant
 
 variable [HasTraceInvariant]
 
-public instance: ReachableImpliesInvariant Sender.seal.reachability := .mk (fun (me, recipient, meSkHandle, recipientPkHandle) => Sender.seal.spec me recipient meSkHandle recipientPkHandle)
-public instance: ReachableImpliesInvariant Recipient.open.reachability := .mk (fun (me, sender, meSkHandle, senderPkHandle, msgHandle) => Recipient.open.spec me sender meSkHandle senderPkHandle msgHandle)
+public instance: ReachableImpliesInvariant Sender.seal.reachability := .mk (fun (me, recipient, meSkHandle, recipientPkHandle) => Sender.seal.proof me recipient meSkHandle recipientPkHandle)
+public instance: ReachableImpliesInvariant Recipient.open.reachability := .mk (fun (me, sender, meSkHandle, senderPkHandle, msgHandle) => Recipient.open.proof me sender meSkHandle senderPkHandle msgHandle)
 
 #combine into ReachabilityTheorem from
   Network,

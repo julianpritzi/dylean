@@ -59,7 +59,7 @@ instance
   : Comparse.ParseableSerializeable (PublicKeyState name)
 := .make <|
   .triviallyIsomorphic
-    (.prod .slowString .bytes)
+    (.prod .unboundedString .bytes)
     (fun ⟨ p, pk ⟩ => { p, pk })
     (fun { p, pk } => ⟨ p, pk ⟩)
 
@@ -374,7 +374,7 @@ end
 
 @[instance]
 public
-theorem generateKeyPair.spec
+theorem generateKeyPair.proof
   [BytesFunctor]
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [BytesInvariants] [BytesInvariantsProofs]
@@ -420,7 +420,7 @@ theorem generateKeyPair.spec
     simp [PersistentLocalState.LocalStateInv.invariant, IsLongTermSecretKey]
     grind
   step
-  trivial
+  grind
 
 /-- The registration ENTRY yields the PKI's ProofTrace fact about the same key.
 
@@ -452,12 +452,12 @@ theorem IsLongTermPublicKey_of_registered
   obtain ⟨i, h_at⟩ := Trace.StateStored_imp_StateInv
     ({ p, pk }: PublicKeyState name) tr h_inv h_reg
   exact ProofConfig.IsLongTermPublicKey_le (name := name) p pk _ _
-    (Trace.prefix_le tr i)
+    (Trace.prefix_le_self tr i)
     (by simpa [PersistentGlobalState.GlobalStateInv.invariant] using h_at)
 
 @[instance]
 public
-theorem getPublicKey.spec
+theorem getPublicKey.proof
   [BytesFunctor]
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [BytesInvariants] [BytesInvariantsProofs]
@@ -485,7 +485,7 @@ theorem getPublicKey.spec
 
 @[instance]
 public
-theorem getPrivateKey.spec
+theorem getPrivateKey.proof
   [BytesFunctor]
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [BytesInvariants] [BytesInvariantsProofs]
@@ -512,7 +512,7 @@ theorem getPrivateKey.spec
 
 @[instance]
 public
-theorem compromisePrivateKey.spec
+theorem compromisePrivateKey.proof
   [BytesFunctor]
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [BytesInvariants] [BytesInvariantsProofs]
@@ -537,7 +537,7 @@ theorem compromisePrivateKey.spec
 := by
   unfold compromisePrivateKey
   step
-  trivial
+  grind
 
 end Proof
 
@@ -606,11 +606,11 @@ variable
 
 public
 instance: ReachableImpliesInvariant (generateKeyPair.reachability name) where
-  pf p := generateKeyPair.spec name p
+  pf p := generateKeyPair.proof name p
 
 public
 instance: ReachableImpliesInvariant (compromisePrivateKey.reachability name) where
-  pf p := compromisePrivateKey.spec name p
+  pf p := compromisePrivateKey.proof name p
 
 public instance: ∀ id, ReachableImpliesInvariant (reachability.internal name id)
   | 0 => inferInstanceAs <| ReachableImpliesInvariant (generateKeyPair.reachability name)

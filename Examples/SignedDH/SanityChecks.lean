@@ -25,14 +25,15 @@ def honestAttacker: Traceful Unit := do
   let (_stServerHandle, msgServerHandle) ← Server.receive "Bob" skHandle msgClientHandle -- 5
   let _ ← Client.finish "Alice" "Bob" pkHandle msgServerHandle stClientHandle -- 2
 
-#guard (honestAttacker.run Trace.nil).fst = some ()
+#guard (honestAttacker.run Trace.empty).fst = some ()
 
+-- Future work: we could design a step-like tactic to automate this proof
 theorem honestAttacker_PreservesReachability
   : honestAttacker.PreservesReachability reachability (fun _ => True) (fun _ _ => True)
 := by
   unfold Traceful.PreservesReachability
   intro tr h_tr h_pre
-  dsimp only [honestAttacker]
+  unfold honestAttacker
 
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (LongTermKeys.generateKeyPair.reachability "SignedDH PKI")
@@ -64,7 +65,7 @@ theorem honestAttacker_PreservesReachability
 
 public
 theorem honestAttacker_properties:
-  let tr := (honestAttacker.run (Trace.nil)).snd.val
+  let tr := (honestAttacker.run (Trace.empty)).snd.val
   tr.Reachable reachability ∧
   ∃ t1 t2 xPk yPk k,
     t1 < t2 ∧
@@ -110,14 +111,15 @@ def compromiseClientEphAttacker: Traceful Unit := do
   let _ ← Network.sendMessage k
   return ()
 
-#guard (compromiseClientEphAttacker.run Trace.nil).fst = some ()
+#guard (compromiseClientEphAttacker.run Trace.empty).fst = some ()
 
+-- Future work: we could design a step-like tactic to automate this proof
 theorem compromiseClientEphAttacker_PreservesReachability
   : compromiseClientEphAttacker.PreservesReachability reachability (fun _ => True) (fun _ _ => True)
 := by
   unfold Traceful.PreservesReachability
   intro tr h_tr h_pre
-  dsimp only [compromiseClientEphAttacker]
+  unfold compromiseClientEphAttacker
 
   apply Traceful.PreservesReachabilityFrom_bind
   · apply honestAttacker_PreservesReachability
@@ -158,8 +160,7 @@ theorem compromiseClientEphAttacker_PreservesReachability
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (Network.reachability)
   · assumption
-  · dsimp only
-    apply Hash.attacker_knows_hash
+  · apply Hash.attacker_knows_hash
     apply DiffieHellman.attacker_knows_dh
     · grind
     · grind
@@ -171,7 +172,7 @@ theorem compromiseClientEphAttacker_PreservesReachability
 
 public
 theorem compromiseClientEphAttacker_properties:
-  let tr := (compromiseClientEphAttacker.run (Trace.nil)).snd.val
+  let tr := (compromiseClientEphAttacker.run (Trace.empty)).snd.val
   tr.Reachable reachability ∧
   ∃ t1 xPk yPk k,
     tr.EventLoggedAt (SignedDHEvent.ClientFinishEvent "Alice" "Bob" xPk yPk k) t1 ∧
@@ -220,24 +221,25 @@ def compromiseSigKeyAttacker: Traceful Unit := do
   let msgClient: ClientMessage ← Comparse.parse msgClientBytes
   let xPk := msgClient.xPk
 
-  let ySk := Literal.literalToBytes "00000000000000000000000000000000".toByteArray
-  let yPk := DiffieHellman.dh_pk ySk
+  let ySk ← Random.attackerGenRand 32
+  let yPk := DiffieHellman.dhPk ySk
   let k := Hash.hash (DiffieHellman.dh xPk ySk)
-  let sigNonce := Literal.literalToBytes "00000000000000000000000000000000".toByteArray
+  let sigNonce ← Random.attackerGenRand 32
   let sig := Signature.sign sigKey sigNonce (Comparse.serialize ({xPk, yPk}: SigInput))
   let msgServerHandle ← Network.sendMessage (Comparse.serialize ({ yPk, sig } : ServerMessage)) -- 1
   let _ ← Client.finish "Alice" "Bob" pkHandle msgServerHandle stClientHandle -- 2
   let _ ← Network.sendMessage k -- 1
   return ()
 
-#guard (compromiseSigKeyAttacker.run Trace.nil).fst = some ()
+#guard (compromiseSigKeyAttacker.run Trace.empty).fst = some ()
 
+-- Future work: we could design a step-like tactic to automate this proof
 theorem compromiseSigKeyAttacker_PreservesReachability
   : compromiseSigKeyAttacker.PreservesReachability reachability (fun _ => True) (fun _ _ => True)
 := by
   unfold Traceful.PreservesReachability
   intro tr h_tr h_pre
-  dsimp only [compromiseSigKeyAttacker]
+  unfold compromiseSigKeyAttacker
 
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (LongTermKeys.generateKeyPair.reachability "SignedDH PKI")
@@ -263,7 +265,6 @@ theorem compromiseSigKeyAttacker_PreservesReachability
   · grind
   intro globalStSigkey tr h_post h_tr h_le
 
-  dsimp
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (Client.initiate.reachability)
   · assumption
@@ -283,20 +284,32 @@ theorem compromiseSigKeyAttacker_PreservesReachability
   intro msgClient tr h_post h_tr h_le
 
   apply Traceful.PreservesReachabilityFrom_bind
+  · apply Random.attackerGenRand.preservesReachability
+  · grind
+  · grind
+  intro ySk tr h_post h_tr h_le
+
+  apply Traceful.PreservesReachabilityFrom_bind
+  · apply Random.attackerGenRand.preservesReachability
+  · grind
+  · grind
+  intro sigNonce tr h_post h_tr h_le
+
+  apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (Network.reachability)
   · assumption
   · simp only [Comparse.AttackerKnows_serialize, ServerMessage.IsWellFormed_eq]
     apply And.intro
-    · apply DiffieHellman.attacker_knows_dh_pk
-      apply Literal.attacker_knows_literalToBytes
+    · apply DiffieHellman.attacker_knows_dhPk
+      grind
     apply Signature.attacker_knows_sign
-    · grind (ematch := 10)
-    · apply Literal.attacker_knows_literalToBytes
+    · grind (ematch := 10) (gen := 10)
+    · grind
     · simp only [Comparse.AttackerKnows_serialize, SigInput.IsWellFormed_eq]
       apply And.intro
       · grind
-      · apply DiffieHellman.attacker_knows_dh_pk
-        apply Literal.attacker_knows_literalToBytes
+      · apply DiffieHellman.attacker_knows_dhPk
+        grind
   intro msgServerHandle tr h_post h_tr h_le
 
   apply Traceful.PreservesReachabilityFrom_bind
@@ -308,11 +321,10 @@ theorem compromiseSigKeyAttacker_PreservesReachability
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (Network.reachability)
   · assumption
-  · dsimp only
-    apply Hash.attacker_knows_hash
+  · apply Hash.attacker_knows_hash
     apply DiffieHellman.attacker_knows_dh
+    · grind (ematch := 10)
     · grind
-    · apply Literal.attacker_knows_literalToBytes
   intro _ tr h_post h_tr h_le
 
   apply Traceful.PreservesReachabilityFrom_pure
@@ -321,7 +333,7 @@ theorem compromiseSigKeyAttacker_PreservesReachability
 
 public
 theorem compromiseSigKeyAttacker_properties:
-  let tr := (compromiseSigKeyAttacker.run (Trace.nil)).snd.val
+  let tr := (compromiseSigKeyAttacker.run (Trace.empty)).snd.val
   tr.Reachable reachability ∧
   ∃ t1 xPk yPk k,
     tr.EventLoggedAt (SignedDHEvent.ClientFinishEvent "Alice" "Bob" xPk yPk k) t1 ∧
@@ -341,10 +353,10 @@ theorem compromiseSigKeyAttacker_properties:
   simp only [DY.Trace.EventLoggedAt_eq_getEventAt]
   simp only [DY.Trace.MessageSentAt_eq_getMessageSentAt]
   let witness :=
-    match (Trace.getEventAt SignedDHEvent 11 tr) with
+    match (Trace.getEventAt SignedDHEvent 15 tr) with
     | some (SignedDHEvent.ClientFinishEvent _ _ xPk yPk k) => (xPk, yPk, k)
     | _ => (Comparse.BytesLike.empty, Comparse.BytesLike.empty, Comparse.BytesLike.empty)
-  refine ⟨ 11, 13, witness.fst, witness.snd.fst, witness.snd.snd, ?_ ⟩
+  refine ⟨ 15, 17, witness.fst, witness.snd.fst, witness.snd.snd, ?_ ⟩
   native_decide
 
 /--

@@ -64,9 +64,9 @@ where
 
 public
 instance instReachabilityConfigCombineHasStep
-  {α: Type}
-  (configs: α → ReachabilityConfig)
-  (id: α)
+  {n: Nat}
+  (configs: Fin n → ReachabilityConfig)
+  (id: Fin n)
   : ReachabilityConfig.HasStep (configs id) (.combine configs)
 where
   inj x := ⟨ id, x ⟩
@@ -76,7 +76,7 @@ where
 public
 inductive Trace.Reachable (config: ReachabilityConfig): ExecTrace → Prop where
   | Base:
-    Trace.Reachable config Trace.nil
+    Trace.Reachable config Trace.empty
   | Step:
     {tr: ExecTrace} →
     (input: config.Input) →
@@ -99,17 +99,17 @@ theorem Trace.Reachable.exists_prefix_containing
       ∃ n, i < n ∧ n ≤ tr.length ∧ (tr.prefix n).Reachable config
 := by
   induction h with
-  | Base => intro i hi; rw [Trace.length_nil] at hi; omega
+  | Base => intro i hi; rw [Trace.length_empty] at hi; omega
   | @Step tr0 input hpre hreach ih =>
     intro i hi
     have hle := ((((config.step input).snd).run tr0).snd).property
     by_cases hlt : i < tr0.length
     · obtain ⟨n, hin, hnle, hn⟩ := ih i hlt
       refine ⟨n, hin, Nat.le_trans hnle (Trace.length_le _ _ hle), ?_⟩
-      rw [Trace.prefix_of_le hle n hnle]
+      rw [← Trace.le_imp_prefix_le_length_eq _ _ n hle hnle]
       exact hn
     · refine ⟨_, hi, Nat.le_refl _, ?_⟩
-      rw [Trace.prefix_eq]
+      rw [Trace.prefix_length_eq_self]
       exact Trace.Reachable.Step input hpre hreach
 
 -- Weakest Precondition
@@ -204,11 +204,11 @@ theorem Traceful.PreservesReachability_to_Reachable
   {pre: ExecTrace → Prop}
   {post: a → ExecTrace → Prop}
   (h: f.PreservesReachability config pre post)
-  : pre Trace.nil →
-    (f.run Trace.nil).snd.val.Reachable config
+  : pre Trace.empty →
+    (f.run Trace.empty).snd.val.Reachable config
 := by
   simp_all [Traceful.PreservesReachability, Traceful.PreservesReachabilityFrom]
-  have := h Trace.nil (.Base)
+  have := h Trace.empty (.Base)
   grind
 
 namespace Meta.CombineMacro
@@ -222,6 +222,7 @@ macro_rules
       combineName := ``DY.ReachabilityConfig.combine
       internalOutTypeStx := fun _ _ => `(term| ReachabilityConfig)
       outTypeStx := fun _ => `(term| ReachabilityConfig)
+      isTheorem := false
     }
 
     let hasStep ← mkHasStep params sources <| .makeSimple {

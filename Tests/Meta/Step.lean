@@ -1,3 +1,5 @@
+module
+
 import DY.Trace
 import DY.Bytes
 import DY.Meta
@@ -10,6 +12,10 @@ variable [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
 variable [BytesFunctor]
 variable [BytesInvariants]
 variable [BytesInvariantsProofs]
+
+section Axiomatization
+
+set_option warn.sorry false
 
 def hash (b: Bytes): Bytes := sorry
 def test_publishable (b: Bytes): Bool := sorry
@@ -32,8 +38,6 @@ def receive_message (n:Nat) : Traceful Bytes := sorry
 abbrev is_knowable_by (b: Bytes) (l: Label) (tr: ProofTrace): Prop :=
   b.Invariant tr ∧
   (b.label tr).canFlow l tr.erase
-
-set_option trace.Step true
 
 instance:
   HoareTriple
@@ -77,6 +81,7 @@ instance:
   where
     pf := sorry
 
+end Axiomatization
 
 def test (b:Bytes) (b2: Bytes): Traceful Bytes := do
   let msg1 ← receive_message 0
@@ -110,18 +115,15 @@ example:
   step
   grind
 
-set_option trace.Step false
-
 -- Test mark_non_monotone (hypothesis h_msg1 must be dropped)
 
 section NonMonotoneHypothesis
 
-def testNonMonoPre: Traceful Unit := sorry
+section Axiomatization
 
-def testNonMono: Traceful Unit := do
-  testNonMonoPre
-  let msg ← receive_message 0
-  send_message msg
+set_option warn.sorry false
+
+def testNonMonoPre: Traceful Unit := sorry
 
 opaque nonMonotoneProperty (tr: ProofTrace): Prop
 
@@ -132,6 +134,13 @@ instance:
     (fun _ _ => True)
   where
     pf := sorry
+
+end Axiomatization
+
+def testNonMono: Traceful Unit := do
+  testNonMonoPre
+  let msg ← receive_message 0
+  send_message msg
 
 /--
 trace: inst✝⁵ : ExecTraceTypes
@@ -182,7 +191,7 @@ HoareTriple
   trace_state
   step
   step
-  trivial
+  grind
 
 end NonMonotoneHypothesis
 
@@ -203,7 +212,7 @@ HoareTriple
   step
   step
   step
-  trivial
+  grind
 
 end AdmitMono
 
@@ -229,11 +238,15 @@ HoareTriple
     exfalso
     simp_all [Bytes.Publishable]
     -- proof is not finished
-  trivial
+  grind
 
 end UnprovedPrecondition
 
 section UnifyGhostArgumentType
+
+section Axiomatization
+
+set_option warn.sorry false
 
 def mk_rand_bis (len:Nat) : Traceful Bytes := sorry
 
@@ -249,6 +262,8 @@ instance (len: Nat) (lab: Bytes → Label) (usg: String):
   where
     pf := sorry
 
+end Axiomatization
+
 def testUnifyGhostType: Traceful Unit := do
   let b ← mk_rand_bis 32
   send_message b
@@ -262,7 +277,7 @@ HoareTriple
   unfold testUnifyGhostType
   step with ⟨ fun _ => Label.pub, "" ⟩
   step
-  trivial
+  grind
 
 end UnifyGhostArgumentType
 
@@ -270,6 +285,10 @@ section IncrementalCleanup
 -- Test that we do not introduce useless hypotheses such as:
 -- - x: Unit
 -- - h: True
+
+section Axiomatization
+
+set_option warn.sorry false
 
 def weirdUnitFunction: Traceful Unit := sorry
 
@@ -280,6 +299,8 @@ instance:
     (fun () _ => True)
   where
     pf := sorry
+
+end Axiomatization
 
 def testIncrementalCleanup: Traceful Unit := do
   let b ← receive_message 0
@@ -318,10 +339,14 @@ HoareTriple
   step
   step
   trace_state
-  trivial
+  grind
 
 -- Test that we do not support post-conditions that actually reference the Unit value
 -- (we could add support, but why?)
+
+section Axiomatization
+
+set_option warn.sorry false
 
 def weirderUnitFunction: Traceful Unit := sorry
 
@@ -332,6 +357,8 @@ instance:
     (fun res _ => res = ())
   where
     pf := sorry
+
+end Axiomatization
 
 def testIncrementalCleanup': Traceful Unit := do
   let b ← receive_message 0
@@ -353,8 +380,7 @@ tr : Trace ProofTrace.Entry
 h : tr.Invariant
 b : Bytes
 h_b✝ : b.Publishable tr
-x✝ : PUnit
-h_x✝ : x✝ = PUnit.unit
+h___r✝ : __r✝ = PUnit.unit
 ⊢ wp
     (do
       send_message b
@@ -376,7 +402,7 @@ HoareTriple
   trace_state -- unit is not cleared because precondition depends on it
   step
   step
-  trivial
+  grind
 
 end IncrementalCleanup
 
@@ -430,9 +456,86 @@ example (n: Nat):
   cleanup
   trace_state
   step
-  trivial
+  grind
 
 end BrutalCleanup
+
+section InconsistentContext1
+
+set_option warn.sorry false
+
+example:
+  HoareTriple (do
+    let msg ← receive_message 0
+    send_message msg
+  )
+  (fun _ => True)
+  (fun _ _ => False)
+:= by
+  have : False := sorry
+  step
+
+end InconsistentContext1
+
+section InconsistentContext2
+
+set_option warn.sorry false
+
+def abort: Traceful Unit := sorry
+
+instance:
+  HoareTriple
+    (abort)
+    (fun _ => True)
+    (fun _ _ => False)
+  where
+    pf := sorry
+
+example:
+  HoareTriple (do
+    let msg ← receive_message 0
+    abort
+    send_message msg
+  )
+  (fun _ => True)
+  (fun _ _ => False)
+:= by
+  step
+  step
+
+end InconsistentContext2
+
+section InconsistentContext3
+
+example:
+  HoareTriple (do
+    let msg ← receive_message 0
+    guard False
+    send_message msg
+  )
+  (fun _ => True)
+  (fun _ _ => False)
+:= by
+  step
+  step
+
+end InconsistentContext3
+
+section InconsistentContext4
+
+example (n: Nat):
+  HoareTriple (do
+    guard (n = 0)
+    guard (n = 1)
+    let _ ← receive_message 0
+  )
+  (fun _ => True)
+  (fun _ _ => False)
+:= by
+  step
+  step
+
+end InconsistentContext4
 
 end StepTest
 

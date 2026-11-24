@@ -118,7 +118,7 @@ where
 
 @[instance]
 public
-theorem sendMessage.spec
+theorem sendMessage.proof
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [BytesInvariants] [BytesInvariantsProofs]
   [ExecTraceTypes.Has ExecEntryT]
@@ -130,15 +130,14 @@ theorem sendMessage.spec
     (fun tr => msg.Publishable tr)
     (fun _ _ => True)
 := by
-  apply HoareTriple.mk
   unfold sendMessage
   dsimp only
   step with ⟨ fun _ => ExecEntryT.mk msg ⟩ by simp_all [ErasableProofEntry.erase, SubTraceInvariant.invariant]
-  trivial
+  grind
 
 @[instance]
 public
-theorem receiveMessage.spec
+theorem receiveMessage.proof
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [BytesInvariants] [BytesInvariantsProofs]
   [ExecTraceTypes.Has ExecEntryT]
@@ -150,7 +149,6 @@ theorem receiveMessage.spec
     (fun _ => True)
     (fun msg tr => msg.Publishable tr)
 := by
-  apply HoareTriple.mk
   unfold receiveMessage
   step
   have: msg.msg.Publishable tr := by simp_all [ErasableProofEntry.erase, SubTraceInvariant.invariant]; grind
@@ -204,7 +202,7 @@ instance: ReachableImpliesInvariant reachability
 where
   pf b := by
     apply HoareTriple.mk
-    have := (sendMessage.spec b).pf
+    have := (sendMessage.proof b).pf
     unfold hoareTriple at *
     grind [Bytes.AttackerKnows_implies_Publishable]
 

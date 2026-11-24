@@ -157,8 +157,10 @@ end AttackerKnowledge
 
 section Invariants
 
+section Definition
+
 variable [ExecTraceTypes] [ProofTraceTypes]
-variable [BytesFunctor] [BytesFunctor.Has SubF]
+variable [BytesFunctor]
 
 public
 def Literal.invariants: Bytes.PartialInvariants Literal.SubF where
@@ -174,13 +176,18 @@ def Literal.invariants: Bytes.PartialInvariants Literal.SubF where
     True
 
 public
-def Literal.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs Literal.invariants where
+theorem Literal.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs Literal.invariants where
+
+end Definition
 
 #combine into
   BytesInvariants,
   BytesInvariantsProofs
 from
   Literal,
+
+variable [ExecTraceTypes] [ProofTraceTypes]
+variable [BytesFunctor] [BytesFunctor.Has SubF]
 
 @[simp]
 public

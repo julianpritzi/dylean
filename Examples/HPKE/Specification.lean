@@ -89,7 +89,7 @@ variable [HasExecBytes]
 public
 instance: ParseableSerializeable CiphertextMessage := .make <|
   .triviallyIsomorphic
-    (.prod .slowBytes (.prod .slowBytes .bytes))
+    (.prod .unboundedBytes (.prod .unboundedBytes .bytes))
     (fun ⟨ enc, aad, ct ⟩ => { enc, aad, ct })
     (fun { enc, aad, ct } => ⟨ enc, aad, ct ⟩)
 

@@ -18,7 +18,7 @@ namespace DY.Example.SignedDH
 
 open DY.Comparse
 
--- TODO: meta-program could divide this section length by 6 (=2*3)
+-- Future work: the following section is boilerplate that could be meta-programmed
 public section ExecBytesConfig
 
 class HasExecBytes where
@@ -103,7 +103,7 @@ deriving DecidableEq
 
 end Structures
 
--- TODO: this section should be meta-programmable
+-- Future work: the following section is boilerplate that could be meta-programmed
 public section Formats
 
 variable [HasExecBytes]
@@ -128,7 +128,7 @@ grind_pattern [grind_later] ClientMessage.IsWellFormed_eq => IsWellFormed pre x 
 public
 instance: ParseableSerializeable ServerMessage := .make <|
   .triviallyIsomorphic
-  (.prod .slowBytes .bytes)
+  (.prod .unboundedBytes .bytes)
   (fun ⟨ yPk, sig ⟩ => { yPk, sig })
   (fun { yPk, sig } => ⟨ yPk, sig ⟩)
 
@@ -148,7 +148,7 @@ grind_pattern [grind_later] ServerMessage.IsWellFormed_eq => IsWellFormed pre x 
 public
 instance: ParseableSerializeable SigInput := .make <|
   .triviallyIsomorphic
-  (.prod .slowBytes .bytes)
+  (.prod .unboundedBytes .bytes)
   (fun ⟨ xPk, yPk ⟩ => { xPk, yPk })
   (fun { xPk, yPk } => ⟨ xPk, yPk ⟩)
 
@@ -168,7 +168,7 @@ grind_pattern [grind_later] SigInput.IsWellFormed_eq => IsWellFormed pre x tr
 public
 instance: ParseableSerializeable ClientInitiateState := .make <|
   .triviallyIsomorphic
-    (.prod .slowBytes .bytes)
+    (.prod .unboundedBytes .bytes)
     (fun ⟨ xPk, xSk ⟩ => { xPk, xSk })
     (fun { xPk, xSk } => ⟨ xPk, xSk ⟩)
 
@@ -184,7 +184,7 @@ grind_pattern ClientInitiateState.IsWellFormed_eq => IsWellFormed pre x tr
 public
 instance: ParseableSerializeable ClientFinishState := .make <|
   .triviallyIsomorphic
-    (.prod .slowBytes .bytes)
+    (.prod .unboundedBytes .bytes)
     (fun ⟨ xPk, kC ⟩ => { xPk, kC })
     (fun { xPk, kC } => ⟨ xPk, kC ⟩)
 
@@ -200,7 +200,7 @@ grind_pattern ClientFinishState.IsWellFormed_eq => IsWellFormed pre x tr
 public
 instance: ParseableSerializeable ServerFinishState := .make <|
   .triviallyIsomorphic
-  (.prod .slowBytes .bytes)
+  (.prod .unboundedBytes .bytes)
   (fun ⟨ yPk, kS ⟩ => { yPk, kS })
   (fun { yPk, kS } => ⟨ yPk, kS ⟩)
 
@@ -215,7 +215,7 @@ grind_pattern ServerFinishState.IsWellFormed_eq => IsWellFormed pre x tr
 
 end Formats
 
--- TODO: a meta-program could divide this section length by 2
+-- Future work: the following section is boilerplate that could be meta-programmed
 public section ExecTraceConfig
 
 class HasExecTrace extends HasExecBytes where
@@ -249,7 +249,7 @@ instance: LongTermKeys.ExecConfig "SignedDH PKI" Signature.vk where
 
 def Client.initiate (me: Participant): Traceful (Nat × Nat) := do
   let xSk ← Random.genRand 32
-  let xPk := DiffieHellman.dh_pk xSk
+  let xPk := DiffieHellman.dhPk xSk
 
   ProtocolEvent.logEvent (SignedDHEvent.ClientInitiateEvent me xPk)
   let stHandle ← PersistentLocalState.storeLocalState me ({ xPk, xSk }: ClientInitiateState)
@@ -263,7 +263,7 @@ def Server.receive (me: Participant) (skHandle: Nat) (msgHandle: Nat): Traceful 
   let serverSigKey ← LongTermKeys.getPrivateKey "SignedDH PKI" me skHandle
 
   let ySk ← Random.genRand 32
-  let yPk := DiffieHellman.dh_pk ySk
+  let yPk := DiffieHellman.dhPk ySk
   let kS := Hash.hash (DiffieHellman.dh xPk ySk)
   let sigNonce ← Random.genRand 32
   let sig := Signature.sign serverSigKey sigNonce (serialize ({xPk, yPk}: SigInput))
@@ -347,6 +347,7 @@ public section Reachability
 
 variable [HasExecTrace]
 
+-- Future work: the following section is boilerplate that could be meta-programmed
 @[expose] public section
 def Client.initiate.reachability: ReachabilityConfig := .make (fun me => Client.initiate me)
 def Server.receive.reachability: ReachabilityConfig := .make (fun (me, skHandle, msgHandle) => Server.receive me skHandle msgHandle)
@@ -358,6 +359,7 @@ end
 
 #combine into ReachabilityConfig from
   Network,
+  Random,
   LongTermKeys "SignedDH PKI",
   Client.initiate,
   Server.receive,

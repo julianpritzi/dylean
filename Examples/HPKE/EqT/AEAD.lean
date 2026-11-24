@@ -136,14 +136,14 @@ def aead_enc.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF]: SubAttack
   pred p out :=
     ∃ key nonce aad msg,
       out = aead_enc key nonce aad msg ∧
-      Kleene.Forall p [key, nonce, aad, msg]
+      p key ∧ p nonce ∧ p aad ∧ p msg
 
 -- Recovery rule: attacker can recover the plaintext if they know key, nonce, aad, and ciphertext.
 public
 def aead_open.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF]: SubAttackerKnowledge SubF where
   pred p out :=
     ∃ key nonce aad,
-      Kleene.Forall p [key, nonce, aad, aead_enc key nonce aad out]
+      p key ∧ p nonce ∧ p aad ∧ p (aead_enc key nonce aad out)
 
 #combine [BytesFunctor.Has SubF] into attackerKnowledge' from
   aead_enc,
@@ -165,7 +165,7 @@ theorem attacker_knows_aead_enc
 := by
   intro h_key h_nonce h_aad h_msg
   apply Bytes.AttackerKnows.prove aead_enc.attackerKnowledge
-  simp only [aead_enc.attackerKnowledge, Kleene.Forall]
+  simp only [aead_enc.attackerKnowledge]
   grind
 
 -- If the attacker knows key, nonce, aad, and the ciphertext, they recover the plaintext.
@@ -180,10 +180,8 @@ theorem attacker_knows_aead_dec
 := by
   intro h_key h_nonce h_aad h_ct
   apply Bytes.AttackerKnows.prove aead_open.attackerKnowledge
-  simp only [aead_open.attackerKnowledge, Kleene.Forall]
-  refine ⟨key, nonce, aad, fun x hx => ?_⟩
-  simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
-  rcases hx with rfl | rfl | rfl | rfl <;> assumption
+  simp only [aead_open.attackerKnowledge]
+  exact ⟨key, nonce, aad, h_key, h_nonce, h_aad, h_ct⟩
 
 end AttackerKnowledge
 
@@ -269,7 +267,7 @@ def AeadEnc.invariantsProofs [BytesInvariants] [AeadPredProof]: Bytes.PartialInv
     simp_all [invariants, DY.ALaCarte.FunctorSizeOf.sizeOf, BytesInvariantLaterT]
     grind
 
-#combine [AeadPred] into
+#combine [BytesFunctor.Has SubF] [AeadPred] into
   BytesInvariants,
   BytesInvariantsProofs [AeadPredProof]
 from
@@ -357,7 +355,7 @@ instance : SubAttackerKnowledgeTheorem aead_enc.attackerKnowledge where
     simp only [aead_enc.attackerKnowledge]
     intro out tr h_tr ⟨key, nonce, aad, msg, ⟨ h_out, h_inputs ⟩⟩
     subst h_out
-    simp_all [Bytes.Publishable, Kleene.Forall]
+    simp_all [Bytes.Publishable]
     simp [aead_enc, Bytes.Invariant.eq, AeadEnc.invariants]
     grind [canFlowTrans]
 
@@ -366,7 +364,7 @@ instance : SubAttackerKnowledgeTheorem aead_open.attackerKnowledge where
   pf := by
     simp only [aead_open.attackerKnowledge]
     intro out tr h_tr ⟨key, nonce, aad, h_inputs⟩
-    simp_all [Bytes.Publishable, Kleene.Forall, aead_enc, Bytes.Invariant.eq, AeadEnc.invariants]
+    simp_all [Bytes.Publishable, aead_enc, Bytes.Invariant.eq, AeadEnc.invariants]
     grind [canFlowTrans]
 
 end AttackerKnowledgeTheoremInstances

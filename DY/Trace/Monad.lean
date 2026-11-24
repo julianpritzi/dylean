@@ -31,6 +31,28 @@ instance [ExecTraceTypes]: Alternative Traceful where
       (optRes, ⟨ trOut.val, by grind [Trace.le_trans] ⟩)
 
 public
+instance [ExecTraceTypes]: LawfulMonad Traceful :=
+  LawfulMonad.mk' Traceful
+    (id_map := by
+      intro _ x
+      simp only [Functor.map, Function.comp]
+      funext
+      grind
+    )
+    (pure_bind := by
+      intro _ _ x f
+      simp only [pure, bind]
+      funext
+      grind
+    )
+    (bind_assoc := by
+      intro _ _ _ x f g
+      simp only [bind]
+      funext
+      grind
+    )
+
+public
 def Traceful.run [ExecTraceTypes] (x: Traceful a) (tr: ExecTrace): (Option a × { trOut: ExecTrace // tr ≤ trOut}) :=
   x tr
 
@@ -38,7 +60,7 @@ public
 def Traceful.mk [ExecTraceTypes] {α: Type} (f: (tr: ExecTrace) → (Option α × { trOut: ExecTrace // tr ≤ trOut})): Traceful α :=
   f
 
-@[expose]
+@[expose, implicit_reducible]
 public
 def Err := OptionT Id
 deriving Monad, Alternative

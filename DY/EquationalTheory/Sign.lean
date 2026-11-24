@@ -153,7 +153,9 @@ def sign.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF]: SubAttackerKn
   pred p out :=
     ∃ sk nonce msg,
       out = sign sk nonce msg ∧
-      Kleene.Forall p [sk, nonce, msg]
+      p sk ∧
+      p nonce ∧
+      p msg
 
 #combine [BytesFunctor.Has SubF] into attackerKnowledge' from
   vk,
@@ -184,15 +186,17 @@ theorem attacker_knows_sign
 := by
   intro h_inp h_nonce h_msg
   apply Bytes.AttackerKnows.prove sign.attackerKnowledge
-  simp only [sign.attackerKnowledge, Kleene.Forall]
+  simp only [sign.attackerKnowledge]
   grind
 
 end AttackerKnowledge
 
 section Invariants
 
+section Definition
+
 variable [ExecTraceTypes] [ProofTraceTypes]
-variable [BytesFunctor] [BytesFunctor.Has Signature.SubF]
+variable [BytesFunctor]
 
 public
 def Vk.invariants: Bytes.PartialInvariants Vk.SubF where
@@ -209,10 +213,14 @@ def Vk.invariants: Bytes.PartialInvariants Vk.SubF where
     (rec sk) tr
 
 public
-def Vk.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs Vk.invariants where
+theorem Vk.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs Vk.invariants where
+
+end Definition
 
 section VkLemmas
 
+variable [ExecTraceTypes] [ProofTraceTypes]
+variable [BytesFunctor] [BytesFunctor.Has Signature.SubF]
 variable [BytesInvariants] [BytesInvariants.Has Vk.invariants]
 
 @[simp]
@@ -241,6 +249,11 @@ theorem vk.Invariant
   simp [vk, Bytes.Invariant.eq, Vk.invariants]
 
 end VkLemmas
+
+section Definition
+
+variable [ExecTraceTypes] [ProofTraceTypes]
+variable [BytesFunctor]
 
 public
 class SignPred where
@@ -273,7 +286,7 @@ theorem SignPredProof.pred_later_fast
 grind_pattern [grind_later] SignPredProof.pred_later_fast => tr1 ≤ tr2, SignPred.pred skUsg vk msg tr1
 
 public
-def Sign.invariants [SignPred]: Bytes.PartialInvariants Sign.SubF where
+def Sign.invariants [BytesFunctor.Has Signature.SubF] [SignPred]: Bytes.PartialInvariants Sign.SubF where
   well_formed := fun {sk, nonce, msg} rec tr =>
       (rec sk) tr ∧
       (rec nonce) tr ∧
@@ -319,13 +332,15 @@ def Sign.invariants [SignPred]: Bytes.PartialInvariants Sign.SubF where
       )
 
 public
-def Sign.invariantsProofs [BytesInvariants] [BytesInvariants.Has Vk.invariants] [SignPred] [SignPredProof]: Bytes.PartialInvariantsProofs Sign.invariants where
+theorem Sign.invariantsProofs [BytesFunctor.Has Signature.SubF] [BytesInvariants] [BytesInvariants.Has Vk.invariants] [SignPred] [SignPredProof]: Bytes.PartialInvariantsProofs Sign.invariants where
   invariant_later := by
     intro _ _ _ _ x rec tr1 tr2
     cases x
     simp_all [invariants, DY.ALaCarte.FunctorSizeOf.sizeOf, BytesInvariantLaterT]
     -- TODO: grind set
     grind [vk.WellFormed]
+
+end Definition
 
 #combine [BytesFunctor.Has SubF] [SignPred] into
   BytesInvariants,
@@ -341,9 +356,7 @@ end Signature
 
 section ExtractSignKey
 
-variable [ExecTraceTypes] [ProofTraceTypes]
-variable [BytesFunctor]
-variable [BytesFunctor.Has Signature.SubF]
+variable [BytesFunctor] [BytesFunctor.Has Signature.SubF]
 
 noncomputable
 def Signature.extractSignkey (vk: Bytes): Option Bytes :=
@@ -359,6 +372,8 @@ theorem Signature.vk_extractSignkey (b: Bytes):
 := by
   simp [extractSignkey, Signature.vk]
   grind
+
+variable [ExecTraceTypes] [ProofTraceTypes]
 
 theorem Signature.extractSignkey.preserves_WellFormed
   [BytesInvariants] [Signature.SignPred] [BytesInvariants.Has Signature.invariants]
@@ -734,7 +749,7 @@ instance: SubAttackerKnowledgeTheorem sign.attackerKnowledge where
     simp only [sign.attackerKnowledge]
     intro out tr h_tr ⟨sk, nonce, msg, ⟨ h_out, h_inputs ⟩⟩
     subst h_out
-    simp_all [Bytes.Publishable, Kleene.Forall]
+    simp_all [Bytes.Publishable]
     simp [sign, Bytes.Invariant.eq, Sign.invariants]
     grind
 

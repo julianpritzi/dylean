@@ -35,7 +35,7 @@ on the public `id`, and `PskIdCompromised name id` — public exactly when *some
 holder's store *bound to this `id`* leaks (`∃ psk p, LocalStateCompromised p
 {psk, id}`) — makes it public. This gives a composer the abstract equation
 `psk.label tr = label name id` with **no trace lookup and no funext**: the
-provisioning step establishes it definitionally from `genRand.spec`.
+provisioning step establishes it definitionally from `genRand.proof`.
 
 Like `LongTermKeys` this is **standalone-driver** machinery (network / trust
 setup), so a *composing* protocol references only the abstract `psk` value, the
@@ -67,7 +67,7 @@ instance
   : Comparse.ParseableSerializeable (PskState name)
 := .make <|
   .triviallyIsomorphic
-    (.prod .slowBytes .bytes)
+    (.prod .unboundedBytes .bytes)
     (fun ⟨ psk, id ⟩ => { psk, id })
     (fun { psk := psk, id := id } => ⟨ psk, id ⟩)
 
@@ -100,7 +100,7 @@ fresh *secret* `psk`, then store the *same* `PskState` — carrying both — at 
 endpoints, returning both store handles. Unlike the earlier inline variant, the
 identity is drawn *here* rather than supplied by the caller, so both endpoints
 provably share one key (`getPsk` reads `id` back out); this is what makes a
-psk-mode round-trip reachable. The proof (`installPsk.spec`) stamps the secret
+psk-mode round-trip reachable. The proof (`installPsk.proof`) stamps the secret
 with the identity-keyed label `label name id`. -/
 public
 def installPsk
@@ -297,7 +297,7 @@ from
 
 @[instance]
 public
-theorem installPsk.spec
+theorem installPsk.proof
   [BytesFunctor]
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [BytesInvariants] [BytesInvariantsProofs]
@@ -337,7 +337,7 @@ theorem installPsk.spec
 
 @[instance]
 public
-theorem getPsk.spec
+theorem getPsk.proof
   [BytesFunctor]
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [BytesInvariants] [BytesInvariantsProofs]
@@ -356,12 +356,11 @@ theorem getPsk.spec
 := by
   unfold getPsk
   step
-  step
   simp_all [PersistentLocalState.LocalStateInv.invariant, IsPreSharedKey]
 
 @[instance]
 public
-theorem compromisePsk.spec
+theorem compromisePsk.proof
   [BytesFunctor]
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [BytesInvariants] [BytesInvariantsProofs]
@@ -448,11 +447,11 @@ variable
 
 public
 instance: ReachableImpliesInvariant (installPsk.reachability name) where
-  pf := fun (p, q) => installPsk.spec name p q
+  pf := fun (p, q) => installPsk.proof name p q
 
 public
 instance: ReachableImpliesInvariant (compromisePsk.reachability name) where
-  pf handle := compromisePsk.spec name handle
+  pf handle := compromisePsk.proof name handle
 
 public instance: ∀ id, ReachableImpliesInvariant (reachability.internal name id)
   | 0 => inferInstanceAs <| ReachableImpliesInvariant (installPsk.reachability name)

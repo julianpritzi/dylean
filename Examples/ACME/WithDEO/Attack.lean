@@ -40,7 +40,7 @@ def attacker: Traceful Unit := do
   LetsEncrypt.finish "LetsEncrypt" msgHandle pendingStHandle' dnsEntryHandle -- 1
   return ()
 
-#guard (attacker.run Trace.nil).fst = some ()
+#guard (attacker.run Trace.empty).fst = some ()
 
 -- TODO: move, but where?
 theorem liftM_parse_preserves_reachability
@@ -52,12 +52,13 @@ theorem liftM_parse_preserves_reachability
   simp only [Traceful.PreservesReachability, Traceful.PreservesReachabilityFrom, liftM, monadLift, MonadLift.monadLift, Traceful.run_mk]
   grind
 
+-- Future work: we could design a step-like tactic to automate this proof
 theorem attacker_PreservesReachability
   : attacker.PreservesReachability reachability (fun _ => True) (fun _ _ => True)
 := by
   unfold Traceful.PreservesReachability
   intro tr h_tr h_pre
-  dsimp only [attacker]
+  unfold attacker
 
   apply Traceful.PreservesReachabilityFrom_bind
   · apply Traceful.PreservesReachability_base (LongTermKeys.generateKeyPair.reachability "ACME PKI")
@@ -162,7 +163,7 @@ theorem rewrite_forall_nat_into_forall_fin {P: Nat → Prop} (n: Nat) (h: ∀ i,
 
 public
 theorem attacker_properties:
-  let tr := (attacker.run (Trace.nil)).snd.val
+  let tr := (attacker.run (Trace.empty)).snd.val
   tr.Reachable reachability ∧
   ∃ t oPk,
     tr.EventLoggedAt (ACMEEvent.LetsEncryptAcceptAddress "example.com" oPk) t ∧

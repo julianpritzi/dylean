@@ -49,7 +49,7 @@ def getGlobalState
 
 `storeGlobalState` appends a plain `State.ExecEntryT`, not a `ProtocolEvent`, so
 `Trace.EventLoggedAt` does not apply. This is its counterpart for stored state,
-and carries the same guarantee: `storeGlobalState.spec` takes the entry's
+and carries the same guarantee: `storeGlobalState.proof` takes the entry's
 invariant as a PRECONDITION, so nothing can append one without discharging it.
 
 `@[expose]` because consumers both construct and destructure it across a module
@@ -212,7 +212,7 @@ end State
 
 @[instance]
 public
-theorem storeGlobalState.spec
+theorem storeGlobalState.proof
   {StateT: Type}
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [GlobalStateInv StateT]
@@ -223,15 +223,14 @@ theorem storeGlobalState.spec
     (fun tr => GlobalStateInv.invariant st tr)
     (fun _ _ => True)
 := by
-  apply HoareTriple.mk
   unfold storeGlobalState
   dsimp only
   step with ⟨ fun _ => State.ExecEntryT.mk st ⟩ by simp_all [ErasableProofEntry.erase, SubTraceInvariant.invariant]
-  trivial
+  grind
 
 @[instance]
 public
-theorem getGlobalState.spec
+theorem getGlobalState.proof
   {StateT: Type}
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [GlobalStateInv StateT]
@@ -242,7 +241,6 @@ theorem getGlobalState.spec
     (fun _ => True)
     (fun st tr => GlobalStateInv.invariant st tr)
 := by
-  apply HoareTriple.mk
   unfold getGlobalState
   step
   have: GlobalStateInv.invariant e.st tr := by simp_all [ErasableProofEntry.erase, SubTraceInvariant.invariant]; grind
@@ -461,7 +459,7 @@ where
 
 @[instance]
 public
-theorem compromise.spec
+theorem compromise.proof
   {StateT: Type}
   [BytesFunctor] [BytesLength]
   [BytesFunctor.Has Literal.SubF] [BytesLength.Has Literal.SubF.length]
@@ -486,7 +484,6 @@ theorem compromise.spec
     (fun _ => True)
     (fun _ _ => True)
 := by
-  apply HoareTriple.mk
   unfold compromise
   step
   -- The event now carries the leaked state's invariant; `getGlobalState` above
@@ -496,7 +493,7 @@ theorem compromise.spec
     have := CompromisableGlobalStateInv.invariant_implies_KnowableBy state tr
     have : (label state).isCorrupt tr.erase := by simp_all [label, ProtocolEvent.label_isCorrupt]
     grind [Comparse.IsWellFormed, canFlowTrans]
-  trivial
+  grind
 
 end Proof
 

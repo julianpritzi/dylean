@@ -31,7 +31,7 @@ instance
   : Comparse.ParseableSerializeable (LocalState StateT)
 := .make <|
   .triviallyIsomorphic
-    (.prod .slowString Comparse.ParseableSerializeable.mf)
+    (.prod .unboundedString Comparse.ParseableSerializeable.mf)
     (fun ⟨ participant, state ⟩ => { participant, state })
     (fun { participant, state } => ⟨ participant, state ⟩)
 
@@ -113,7 +113,7 @@ end State
 
 @[instance]
 public
-theorem storeLocalState.spec
+theorem storeLocalState.proof
   {StateT: Type}
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [LocalStateInv StateT]
@@ -124,14 +124,13 @@ theorem storeLocalState.spec
     (fun tr => LocalStateInv.invariant participant state tr)
     (fun _ _ => True)
 := by
-  apply HoareTriple.mk
   unfold storeLocalState
   step by simp_all [PersistentGlobalState.GlobalStateInv.invariant]
-  trivial
+  grind
 
 @[instance]
 public
-theorem getLocalState.spec
+theorem getLocalState.proof
   {StateT: Type}
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [LocalStateInv StateT]
@@ -142,7 +141,6 @@ theorem getLocalState.spec
     (fun _ => True)
     (fun st tr => LocalStateInv.invariant participant st tr)
 := by
-  apply HoareTriple.mk
   unfold getLocalState
   step
   step
@@ -309,7 +307,7 @@ where
 
 @[instance]
 public
-theorem compromise.spec
+theorem compromise.proof
   {StateT: Type}
   [BytesFunctor] [BytesLength]
   [BytesFunctor.Has Literal.SubF] [BytesLength.Has Literal.SubF.length]
@@ -336,10 +334,9 @@ theorem compromise.spec
     (fun _ => True)
     (fun _ _ => True)
 := by
-  apply HoareTriple.mk
   unfold compromise
   step
-  trivial
+  grind
 
 end Proof
 

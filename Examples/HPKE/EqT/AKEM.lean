@@ -255,21 +255,21 @@ def kemEncapCipher.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF]: Sub
   pred p out :=
     ∃ pkR skS entropy rhs,
       (out, rhs) = kemEncap pkR skS entropy ∧
-      Kleene.Forall p [pkR, skS, entropy]
+      p pkR ∧ p skS ∧ p entropy
 
 public
 def kemEncapSS.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF]: SubAttackerKnowledge SubF where
   pred p out :=
     ∃ pkR skS entropy lhs,
       (lhs, out) = kemEncap pkR skS entropy ∧
-      Kleene.Forall p [pkR, skS, entropy]
+      p pkR ∧ p skS ∧ p entropy
 
 public
 def kemDecap.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF]: SubAttackerKnowledge SubF where
   pred p out :=
     ∃ skR pkS cipher,
       some out = kemDecap skR pkS cipher ∧
-      Kleene.Forall p [skR, pkS, cipher]
+      p skR ∧ p pkS ∧ p cipher
 
 #combine [BytesFunctor.Has SubF] into attackerKnowledge' from
   kemPk,
@@ -304,10 +304,10 @@ theorem kemEncap.attacker_knows
   intro h_pkR h_skS h_entropy
   apply And.intro
   · apply Bytes.AttackerKnows.prove kemEncapCipher.attackerKnowledge
-    simp only [kemEncapCipher.attackerKnowledge, Kleene.Forall]
+    simp only [kemEncapCipher.attackerKnowledge]
     grind
   · apply Bytes.AttackerKnows.prove kemEncapSS.attackerKnowledge
-    simp only [kemEncapSS.attackerKnowledge, Kleene.Forall]
+    simp only [kemEncapSS.attackerKnowledge]
     grind
 
 public
@@ -324,7 +324,7 @@ theorem kemDecap.attacker_knows
   split
   · grind
   apply Bytes.AttackerKnows.prove kemDecap.attackerKnowledge
-  simp only [kemDecap.attackerKnowledge, Kleene.Forall]
+  simp only [kemDecap.attackerKnowledge]
   grind
 
 end AttackerKnowledge
@@ -779,7 +779,7 @@ instance : SubAttackerKnowledgeTheorem kemEncapCipher.attackerKnowledge where
   pf := by
     simp only [kemEncapCipher.attackerKnowledge]
     intro out tr h_tr ⟨pkR, skS, entropy, rhs, h_out, h_inputs⟩
-    simp_all [kemEncap, Kleene.Forall, Bytes.Publishable, Bytes.Invariant.eq, Encap.invariants]
+    simp_all [kemEncap, Bytes.Publishable, Bytes.Invariant.eq, Encap.invariants]
     grind [canFlowTrans]
 
 public
@@ -787,7 +787,7 @@ instance : SubAttackerKnowledgeTheorem kemEncapSS.attackerKnowledge where
   pf := by
     simp only [kemEncapSS.attackerKnowledge]
     intro out tr h_tr ⟨pkR, skS, entropy, lhs, h_out, h_inputs⟩
-    simp_all [kemEncap, Kleene.Forall, Bytes.Publishable, Bytes.Invariant.eq, SharedSecret.invariants]
+    simp_all [kemEncap, Bytes.Publishable, Bytes.Invariant.eq, SharedSecret.invariants]
 
 public
 instance : SubAttackerKnowledgeTheorem kemDecap.attackerKnowledge where
@@ -796,7 +796,6 @@ instance : SubAttackerKnowledgeTheorem kemDecap.attackerKnowledge where
     intro out tr h_tr ⟨skR, pkS, cipher, h_out, h_inputs⟩
     have := (kemDecap_hoareTriple skR pkS cipher).pf
     simp only [hoareTriple, wp, OptionT.run, ← h_out] at this
-    simp [Kleene.Forall] at h_inputs
     grind [canFlowTrans]
 
 end AttackerKnowledgeTheorem

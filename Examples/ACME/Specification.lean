@@ -18,6 +18,7 @@ namespace DY.Example.ACME
 
 open DY.Comparse
 
+-- Future work: the following section is boilerplate that could be meta-programmed
 public section ExecBytesConfig
 
 class HasExecBytes where
@@ -85,7 +86,7 @@ deriving DecidableEq
 
 end Structures
 
--- TODO: this section should be meta-programmable
+-- Future work: the following section is boilerplate that could be meta-programmed
 public section Formats
 
 variable [HasExecBytes]
@@ -93,7 +94,7 @@ variable [HasExecBytes]
 public
 instance: ParseableSerializeable LetsEncryptMessage := .make <|
   .triviallyIsomorphic
-  (.prod .slowBytes .bytes)
+  (.prod .unboundedBytes .bytes)
   (fun ⟨ token, sig ⟩ => { token, sig })
   (fun { token, sig } => ⟨ token, sig ⟩)
 
@@ -113,7 +114,7 @@ grind_pattern [grind_later] LetsEncryptMessage.IsWellFormed_eq => IsWellFormed p
 public
 instance: ParseableSerializeable OwnerMessage := .make <|
   .triviallyIsomorphic
-  (.prod .slowString .bytes)
+  (.prod .unboundedString .bytes)
   (fun ⟨ address, oPk ⟩ => { address, oPk })
   (fun { address, oPk } => ⟨ address, oPk ⟩)
 
@@ -151,7 +152,7 @@ grind_pattern [grind_later] OwnerKeyState.IsWellFormed_eq => IsWellFormed pre x 
 public
 instance: ParseableSerializeableNE OwnerAddressState := .make <|
   .triviallyIsomorphic
-  (.prod .slowString .slowBytes)
+  (.prod .unboundedString .unboundedBytes)
   (fun ⟨ address, oSk ⟩ => { address, oSk })
   (fun { address, oSk } => ⟨ address, oSk ⟩)
 
@@ -170,7 +171,7 @@ grind_pattern [grind_later] OwnerAddressState.IsWellFormed_eq => IsWellFormed pr
 public
 instance: ParseableSerializeableNE LetsEncryptPendingChallengeState := .make <|
   .triviallyIsomorphic
-  (.prod .slowString .slowBytes)
+  (.prod .unboundedString .unboundedBytes)
   (fun ⟨ address, token ⟩ => { address, token })
   (fun { address, token } => ⟨ address, token ⟩)
 
@@ -189,7 +190,7 @@ grind_pattern [grind_later] LetsEncryptPendingChallengeState.IsWellFormed_eq => 
 public
 instance: ParseableSerializeable DNSEntry := .make <|
   .triviallyIsomorphic
-  (.prod .slowString .bytes)
+  (.prod .unboundedString .bytes)
   (fun ⟨ address, sig ⟩ => { address, sig })
   (fun { address, sig } => ⟨ address, sig ⟩)
 
@@ -207,6 +208,7 @@ grind_pattern [grind_later] DNSEntry.IsWellFormed_eq => IsWellFormed pre x tr
 
 end Formats
 
+-- Future work: the following section is boilerplate that could be meta-programmed
 public section ExecTraceConfig
 
 class HasExecTrace extends HasExecBytes where
@@ -311,6 +313,7 @@ public section Reachability
 
 variable [HasExecTrace]
 
+-- Future work: the following section is boilerplate that could be meta-programmed
 @[expose] public section
 def Owner.generateKeyPair.reachability: ReachabilityConfig := .make (fun owner => Owner.generateKeyPair owner)
 def Owner.claimAddress.reachability: ReachabilityConfig := .make (fun (owner, address, oSkHandle) => Owner.claimAddress owner address oSkHandle)
@@ -326,6 +329,7 @@ end
 
 #combine into ReachabilityConfig from
   Network,
+  Random,
   LongTermKeys "ACME PKI",
   Owner.generateKeyPair,
   Owner.claimAddress,

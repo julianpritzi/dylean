@@ -9,11 +9,10 @@ namespace DY.DiffieHellman
 
 public
 class CanDH (Bytes: Type u) where
-  -- TODO: naming convention
-  dh_pk: (sk: Bytes) → Bytes
+  dhPk: (sk: Bytes) → Bytes
   dh: (pk: Bytes) → (sk: Bytes) → Bytes
 
-export CanDH (dh_pk)
+export CanDH (dhPk)
 export CanDH (dh)
 
 section Constructors
@@ -127,7 +126,7 @@ abbrev Dh.SubF.pack (x: Dh.SubF Bytes) := BytesView.pack x
 
 public
 instance: CanDH Bytes where
-  dh_pk sk :=
+  dhPk sk :=
     ({sk}: DhPk.SubF Bytes).pack
 
   dh pk sk :=
@@ -143,22 +142,22 @@ instance: CanDH Bytes where
 public
 theorem dh_commutes
   (sk1 sk2: Bytes)
-  : dh (dh_pk sk1) sk2 = dh (dh_pk sk2) sk1
+  : dh (dhPk sk1) sk2 = dh (dhPk sk2) sk1
 := by
-  simp only [dh_pk, dh, BytesView.view_pack]
+  simp only [dhPk, dh, BytesView.view_pack]
   grind
 
-grind_pattern dh_commutes => dh (dh_pk sk1) sk2, dh (dh_pk sk2) sk1
+grind_pattern dh_commutes => dh (dhPk sk1) sk2, dh (dhPk sk2) sk1
 
 end Constructors
 
 section AttackerKnowledge
 
 public
-def dh_pk.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF]: SubAttackerKnowledge SubF where
+def dhPk.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF]: SubAttackerKnowledge SubF where
   pred p out :=
     ∃ sk,
-      out = dh_pk sk ∧
+      out = dhPk sk ∧
       p sk
 
 public
@@ -166,10 +165,11 @@ def dh.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF]: SubAttackerKnow
   pred p out :=
     ∃ pk sk,
       out = dh pk sk ∧
-      Kleene.Forall p [pk, sk]
+      p pk ∧
+      p sk
 
 #combine [BytesFunctor.Has SubF] into attackerKnowledge' from
-  dh_pk,
+  dhPk,
   dh,
 
 variable [BytesFunctor] [BytesFunctor.Has SubF]
@@ -177,14 +177,14 @@ variable [ExecTraceTypes] [BaseAttackerKnowledge]
 variable [AttackerKnowledge] [AttackerKnowledge.Has attackerKnowledge]
 
 public
-theorem attacker_knows_dh_pk
+theorem attacker_knows_dhPk
   (sk: Bytes) (tr: ExecTrace)
   : sk.AttackerKnows tr →
-    (dh_pk sk).AttackerKnows tr
+    (dhPk sk).AttackerKnows tr
 := by
   intro h_inp
-  apply Bytes.AttackerKnows.prove dh_pk.attackerKnowledge
-  simp only [dh_pk.attackerKnowledge]
+  apply Bytes.AttackerKnows.prove dhPk.attackerKnowledge
+  simp only [dhPk.attackerKnowledge]
   grind
 
 public
@@ -196,15 +196,17 @@ theorem attacker_knows_dh
 := by
   intro h_pk h_sk
   apply Bytes.AttackerKnows.prove dh.attackerKnowledge
-  simp only [dh.attackerKnowledge, Kleene.Forall]
+  simp only [dh.attackerKnowledge]
   grind
 
 end AttackerKnowledge
 
 section Invariants
 
+section Definition
+
 variable [ExecTraceTypes] [ProofTraceTypes]
-variable [BytesFunctor] [BytesFunctor.Has DiffieHellman.SubF]
+variable [BytesFunctor]
 
 public
 def DhPk.invariants: Bytes.PartialInvariants DhPk.SubF where
@@ -221,40 +223,49 @@ def DhPk.invariants: Bytes.PartialInvariants DhPk.SubF where
     (rec sk) tr
 
 public
-def DhPk.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs DhPk.invariants where
+theorem DhPk.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs DhPk.invariants where
+
+end Definition
 
 section DhPkLemmas
 
+variable [ExecTraceTypes] [ProofTraceTypes]
+variable [BytesFunctor] [BytesFunctor.Has DiffieHellman.SubF]
 variable [BytesInvariants] [BytesInvariants.Has DhPk.invariants]
 
 @[simp]
 public
-theorem dh_pk.WellFormed
+theorem dhPk.WellFormed
   (sk: Bytes) (tr: ProofTrace)
   :
-    (dh_pk sk).WellFormed tr = sk.WellFormed tr
+    (dhPk sk).WellFormed tr = sk.WellFormed tr
 := by
-  simp [dh_pk, Bytes.WellFormed.eq, DhPk.invariants]
+  simp [dhPk, Bytes.WellFormed.eq, DhPk.invariants]
 
 @[simp]
 public
-theorem dh_pk.label
+theorem dhPk.label
   (sk: Bytes) (tr: ProofTrace)
-  : (dh_pk sk).label tr = Label.pub
+  : (dhPk sk).label tr = Label.pub
 := by
-  simp [dh_pk, Bytes.label.eq, DhPk.invariants]
+  simp [dhPk, Bytes.label.eq, DhPk.invariants]
 
 @[simp]
 public
-theorem dh_pk.Invariant
+theorem dhPk.Invariant
   (sk: Bytes) (tr: ProofTrace)
   :
     sk.Invariant tr →
-    (dh_pk sk).Invariant tr
+    (dhPk sk).Invariant tr
 := by
-  simp [dh_pk, Bytes.Invariant.eq, DhPk.invariants]
+  simp [dhPk, Bytes.Invariant.eq, DhPk.invariants]
 
 end DhPkLemmas
+
+section Definition
+
+variable [ExecTraceTypes] [ProofTraceTypes]
+variable [BytesFunctor] [BytesFunctor.Has DiffieHellman.SubF]
 
 public
 def Dh.invariants: Bytes.PartialInvariants Dh.SubF where
@@ -276,11 +287,13 @@ def Dh.invariants: Bytes.PartialInvariants Dh.SubF where
       (rec sk) tr
 
 public
-def Dh.invariantsProofs [BytesInvariants] [BytesInvariants.Has DhPk.invariants]: Bytes.PartialInvariantsProofs Dh.invariants where
+theorem Dh.invariantsProofs [BytesInvariants] [BytesInvariants.Has DhPk.invariants]: Bytes.PartialInvariantsProofs Dh.invariants where
   label_later := by
     intro _ x rec tr1 tr2
     cases x
     simp_all [DhPk.invariants, invariants, DY.ALaCarte.FunctorSizeOf.sizeOf, GetLabelLaterT] <;> grind
+
+end Definition
 
 #combine [BytesFunctor.Has SubF] into
   BytesInvariants,
@@ -296,9 +309,7 @@ end DiffieHellman
 
 section ExtractDhSk
 
-variable [ExecTraceTypes] [ProofTraceTypes]
-variable [BytesFunctor]
-variable [BytesFunctor.Has DiffieHellman.SubF]
+variable [BytesFunctor] [BytesFunctor.Has DiffieHellman.SubF]
 
 noncomputable
 def DiffieHellman.extractDhSk (pk: Bytes): Option Bytes :=
@@ -307,20 +318,22 @@ def DiffieHellman.extractDhSk (pk: Bytes): Option Bytes :=
     some sk
   | none => none
 
-theorem DiffieHellman.dh_pk_extractDhSk (b: Bytes):
+theorem DiffieHellman.dhPk_extractDhSk (b: Bytes):
   match extractDhSk b with
   | none => True
-  | some sk => b = DiffieHellman.dh_pk sk
+  | some sk => b = DiffieHellman.dhPk sk
 := by
-  simp [extractDhSk, DiffieHellman.dh_pk]
+  simp [extractDhSk, DiffieHellman.dhPk]
   grind
+
+variable [ExecTraceTypes] [ProofTraceTypes]
 
 theorem DiffieHellman.extractDhSk.preserves_WellFormed
   [BytesInvariants] [BytesInvariants.Has DiffieHellman.invariants]
 : ExtractPreservesWellFormed extractDhSk
 := by
   simp [ExtractPreservesWellFormed]
-  grind [DiffieHellman.dh_pk_extractDhSk, DiffieHellman.dh_pk.WellFormed]
+  grind [DiffieHellman.dhPk_extractDhSk, DiffieHellman.dhPk.WellFormed]
 
 public
 noncomputable
@@ -331,16 +344,16 @@ def Bytes.dhSkLabel
   Bytes.xxxLabel DiffieHellman.extractDhSk pk tr
 
 public
-theorem Bytes.dhSkLabel_dh_pk
+theorem Bytes.dhSkLabel_dhPk
   [BytesInvariants]
   [BytesInvariants.Has DiffieHellman.invariants]
   (sk: Bytes) (tr: ProofTrace)
-  : (DiffieHellman.dh_pk sk).dhSkLabel tr = sk.label tr
+  : (DiffieHellman.dhPk sk).dhSkLabel tr = sk.label tr
 := by
-  simp [Bytes.dhSkLabel, Bytes.xxxLabel, DiffieHellman.extractDhSk, DiffieHellman.dh_pk]
+  simp [Bytes.dhSkLabel, Bytes.xxxLabel, DiffieHellman.extractDhSk, DiffieHellman.dhPk]
   grind
 
-grind_pattern Bytes.dhSkLabel_dh_pk => (DiffieHellman.dh_pk sk).dhSkLabel tr
+grind_pattern Bytes.dhSkLabel_dhPk => (DiffieHellman.dhPk sk).dhSkLabel tr
 
 public
 theorem Bytes.dhSkLabel_later
@@ -389,11 +402,11 @@ theorem dh.WellFormed
   simp only [dh]
   split
   · rename_i sk2 heq
-    have: pk = dh_pk sk2 := by simp_all [dh_pk]; grind [dh_pk]
+    have: pk = dhPk sk2 := by simp_all [dhPk]; grind [dhPk]
     split
     all_goals
       simp [Dh.invariants, DhPk.invariants]
-      grind [dh_pk.WellFormed]
+      grind [dhPk.WellFormed]
   · simp [Dh.invariants]
 
 @[simp]
@@ -445,7 +458,7 @@ public
 instance
   (sk: Bytes)
   : HoareTriplePure
-    (dh_pk sk)
+    (dhPk sk)
     (fun tr => sk.Invariant tr)
     (fun res tr =>
       res.Invariant tr ∧
@@ -454,7 +467,7 @@ instance
     )
   where
     pf := by
-      grind [dh_pk.Invariant, dh_pk.label]
+      grind [dhPk.Invariant, dhPk.label]
 
 public
 instance
@@ -485,9 +498,9 @@ variable [BytesFunctor.Has SubF]
 variable [BytesInvariants.Has invariants]
 
 public
-instance: SubAttackerKnowledgeTheorem dh_pk.attackerKnowledge where
+instance: SubAttackerKnowledgeTheorem dhPk.attackerKnowledge where
   pf := by
-    simp only [dh_pk.attackerKnowledge]
+    simp only [dhPk.attackerKnowledge]
     intro out tr h_tr ⟨sk, ⟨ h_out, h_sk ⟩⟩
     subst h_out
     simp_all [Bytes.Publishable]
@@ -499,14 +512,14 @@ instance: SubAttackerKnowledgeTheorem dh.attackerKnowledge where
     simp only [dh.attackerKnowledge]
     intro out tr h_tr ⟨pk, sk, ⟨ h_out, h_inputs ⟩⟩
     subst h_out
-    simp_all [Bytes.Publishable, Kleene.Forall]
+    simp_all [Bytes.Publishable]
     grind
 
 end AttackerKnowledgeTheorem
 section AttackerKnowledgeTheorem
 
 #combine [BytesFunctor.Has SubF] [BytesInvariants.Has invariants] into SubAttackerKnowledgeTheorem' from
-  dh_pk,
+  dhPk,
   dh
 
 end AttackerKnowledgeTheorem

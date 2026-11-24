@@ -156,7 +156,9 @@ def sign.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF]: SubAttackerKn
   pred p out :=
     ∃ sk nonce msg,
       out = sign sk nonce msg ∧
-      Kleene.Forall p [sk, nonce, msg]
+      p sk ∧
+      p nonce ∧
+      p msg
 
 #combine [BytesFunctor.Has SubF] into attackerKnowledge' from
   vk,
@@ -187,7 +189,7 @@ theorem attacker_knows_sign
 := by
   intro h_inp h_nonce h_msg
   apply Bytes.AttackerKnows.prove sign.attackerKnowledge
-  simp only [sign.attackerKnowledge, Kleene.Forall]
+  simp only [sign.attackerKnowledge]
   grind
 
 end AttackerKnowledge
@@ -286,6 +288,8 @@ end Broken
 
 section Invariants
 
+section Definition
+
 variable [ExecTraceTypes] [ProofTraceTypes]
 variable [BytesFunctor] [BytesFunctor.Has Signature'.SubF]
 variable [ExecTraceTypes.Has Broken.ExecEntryT]
@@ -306,10 +310,15 @@ def Vk.invariants: Bytes.PartialInvariants Vk.SubF where
     (rec sk) tr
 
 public
-def Vk.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs Vk.invariants where
+theorem Vk.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs Vk.invariants where
+
+end Definition
 
 section VkLemmas
 
+variable [ExecTraceTypes] [ProofTraceTypes]
+variable [BytesFunctor] [BytesFunctor.Has Signature'.SubF]
+variable [ExecTraceTypes.Has Broken.ExecEntryT]
 variable [BytesInvariants] [BytesInvariants.Has Vk.invariants]
 
 @[simp]
@@ -341,6 +350,11 @@ theorem vk.Invariant
 
 end VkLemmas
 
+section Definition
+
+variable [ExecTraceTypes] [ProofTraceTypes]
+variable [BytesFunctor]
+
 public
 class SignPred where
   pred: [BytesWellFormed] → [GetUsage] → [GetLabel] → Usage → Bytes → Bytes → ProofTrace → Prop
@@ -370,6 +384,8 @@ theorem SignPredProof.pred_later_fast
 := by grind
 
 grind_pattern [grind_later] SignPredProof.pred_later_fast => tr1 ≤ tr2, SignPred.pred skUsg vk msg tr1
+
+variable [BytesFunctor.Has Signature'.SubF]
 
 public
 def Sign.invariants [SignPred]: Bytes.PartialInvariants Sign.SubF where
@@ -417,14 +433,18 @@ def Sign.invariants [SignPred]: Bytes.PartialInvariants Sign.SubF where
         )
       )
 
+variable [ExecTraceTypes.Has Broken.ExecEntryT]
+
 public
-def Sign.invariantsProofs [BytesInvariants] [BytesInvariants.Has Vk.invariants] [SignPred] [SignPredProof]: Bytes.PartialInvariantsProofs Sign.invariants where
+theorem Sign.invariantsProofs [BytesInvariants] [BytesInvariants.Has Vk.invariants] [SignPred] [SignPredProof]: Bytes.PartialInvariantsProofs Sign.invariants where
   invariant_later := by
     intro _ _ _ _ x rec tr1 tr2
     cases x
     simp_all [invariants, DY.ALaCarte.FunctorSizeOf.sizeOf, BytesInvariantLaterT]
     -- TODO: grind set
     grind [vk.WellFormed]
+
+end Definition
 
 #combine [BytesFunctor.Has SubF] [SignPred] [ExecTraceTypes.Has Broken.ExecEntryT] into
   BytesInvariants,
@@ -440,10 +460,7 @@ end Signature'
 
 section ExtractSignKey
 
-variable [ExecTraceTypes] [ProofTraceTypes]
-variable [BytesFunctor]
-variable [BytesFunctor.Has Signature'.SubF]
-variable [ExecTraceTypes.Has Signature'.Broken.ExecEntryT]
+variable [BytesFunctor] [BytesFunctor.Has Signature'.SubF]
 
 noncomputable
 def Signature'.extractSignkey (vk: Bytes): Option Bytes :=
@@ -460,8 +477,10 @@ theorem Signature'.vk_extractSignkey (b: Bytes):
   simp [extractSignkey, Signature'.vk]
   grind
 
+variable [ExecTraceTypes] [ProofTraceTypes]
+
 theorem Signature'.extractSignkey.preserves_WellFormed
-  [BytesInvariants] [Signature'.SignPred] [BytesInvariants.Has Signature'.invariants]
+  [ExecTraceTypes.Has Signature'.Broken.ExecEntryT] [BytesInvariants] [Signature'.SignPred] [BytesInvariants.Has Signature'.invariants]
 : ExtractPreservesWellFormed extractSignkey
 := by
   simp [ExtractPreservesWellFormed]
@@ -488,6 +507,7 @@ grind_pattern Bytes.SignkeyHasUsage'_vk => (Signature'.vk sk).SignkeyHasUsage' s
 public
 theorem Bytes.SignkeyHasUsage'_later
   [BytesInvariants] [BytesInvariantsProofs]
+  [ExecTraceTypes.Has Signature'.Broken.ExecEntryT]
   [Signature'.SignPred] [BytesInvariants.Has Signature'.invariants]
   (b: Bytes) (usg: Usage) (tr1 tr2: ProofTrace)
   : b.WellFormed tr1 →
@@ -503,6 +523,7 @@ grind_pattern Bytes.SignkeyHasUsage'_later => tr1 ≤ tr2, b.SignkeyHasUsage' us
 public
 theorem Bytes.SignkeyHasUsage'_later_fast
   [BytesInvariants] [BytesInvariantsProofs]
+  [ExecTraceTypes.Has Signature'.Broken.ExecEntryT]
   [Signature'.SignPred] [BytesInvariants.Has Signature'.invariants]
   (b: Bytes) (usg: Usage) (tr1 tr2: ProofTrace)
   : b.Invariant tr1 →
@@ -524,6 +545,7 @@ def Bytes.signkeyLabel'
 public
 theorem Bytes.signkeyLabel'_vk
   [BytesInvariants]
+  [ExecTraceTypes.Has Signature'.Broken.ExecEntryT]
   [Signature'.SignPred] [BytesInvariants.Has Signature'.invariants]
   (sk: Bytes) (tr: ProofTrace)
   : (Signature'.vk sk).signkeyLabel' tr = sk.label tr
@@ -536,6 +558,7 @@ grind_pattern Bytes.signkeyLabel'_vk => (Signature'.vk sk).signkeyLabel' tr
 public
 theorem Bytes.signkeyLabel'_later
   [BytesInvariants] [BytesInvariantsProofs]
+  [ExecTraceTypes.Has Signature'.Broken.ExecEntryT]
   [Signature'.SignPred] [BytesInvariants.Has Signature'.invariants]
   (b: Bytes) (tr1 tr2: ProofTrace)
   : b.WellFormed tr1 →
@@ -550,6 +573,7 @@ grind_pattern Bytes.signkeyLabel'_later => tr1 ≤ tr2, b.signkeyLabel' tr1
 public
 theorem Bytes.signkeyLabel'_later_fast
   [BytesInvariants] [BytesInvariantsProofs]
+  [ExecTraceTypes.Has Signature'.Broken.ExecEntryT]
   [Signature'.SignPred] [BytesInvariants.Has Signature'.invariants]
   (b: Bytes) (tr1 tr2: ProofTrace)
   : b.Invariant tr1 →
@@ -781,7 +805,7 @@ instance: SubAttackerKnowledgeTheorem sign.attackerKnowledge where
     simp only [sign.attackerKnowledge]
     intro out tr h_tr ⟨sk, nonce, msg, ⟨ h_out, h_inputs ⟩⟩
     subst h_out
-    simp_all [Bytes.Publishable, Kleene.Forall]
+    simp_all [Bytes.Publishable]
     simp [sign, Bytes.Invariant.eq, Sign.invariants]
     grind
 
@@ -803,7 +827,7 @@ variable [SignPred]
 variable [BytesInvariants.Has Signature'.invariants]
 
 @[instance]
-theorem vkInvert.spec (pk: Bytes)
+theorem vkInvert.proof (pk: Bytes)
   : HoareTriple
     (vkInvert pk)
     (fun tr => tr.erase.EventLogged ({brokenPk := pk}: Broken.BrokenDhEvent) ∧ pk.Publishable tr)
@@ -840,7 +864,7 @@ variable [TraceInvariant.Has Network.ProofEntryT]
 variable [TraceInvariant.Has Broken.ProofEntryT]
 
 @[instance]
-theorem breakVk.spec (msgHandle: Nat)
+theorem breakVk.proof (msgHandle: Nat)
   : HoareTriple
     (breakVk msgHandle)
     (fun _ => True)
@@ -851,10 +875,9 @@ theorem breakVk.spec (msgHandle: Nat)
   step by simp [ProtocolEvent.EventInv.invariant]
   step
   step
-  step
   grind
 
-public instance: ReachableImpliesInvariant breakVk.reachability := .mk (fun (msgHandle) => breakVk.spec msgHandle)
+public instance: ReachableImpliesInvariant breakVk.reachability := .mk (fun (msgHandle) => breakVk.proof msgHandle)
 
 end Broken
 

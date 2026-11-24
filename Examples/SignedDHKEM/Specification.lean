@@ -19,6 +19,7 @@ namespace DY.Example.SignedDHKEM
 
 open DY.Comparse
 
+-- Future work: the following section is boilerplate that could be meta-programmed
 public section ExecBytesConfig
 
 class HasExecBytes where
@@ -120,6 +121,7 @@ deriving DecidableEq
 
 end Structures
 
+-- Future work: the following section is boilerplate that could be meta-programmed
 public section Formats
 
 variable [HasExecBytes]
@@ -127,7 +129,7 @@ variable [HasExecBytes]
 public
 instance: ParseableSerializeable ClientMessage := .make <|
   .triviallyIsomorphic
-    (.prod .slowBytes .bytes)
+    (.prod .unboundedBytes .bytes)
     (fun (xPk, zPk) => { xPk, zPk })
     (fun { xPk, zPk } => (xPk, zPk))
 
@@ -147,7 +149,7 @@ grind_pattern [grind_later] ClientMessage.IsWellFormed_eq => IsWellFormed pre x 
 public
 instance: ParseableSerializeable ServerMessage := .make <|
   .triviallyIsomorphic
-  (.prod .slowBytes (.prod .slowBytes .bytes))
+  (.prod .unboundedBytes (.prod .unboundedBytes .bytes))
   (fun ⟨ yPk, ct, sig ⟩ => { yPk, ct, sig })
   (fun { yPk, ct, sig } => ⟨ yPk, ct, sig ⟩)
 
@@ -168,7 +170,7 @@ grind_pattern [grind_later] ServerMessage.IsWellFormed_eq => IsWellFormed pre x 
 public
 instance: ParseableSerializeable SigInput := .make <|
   .triviallyIsomorphic
-  (.prod .slowBytes (.prod .slowBytes (.prod .slowBytes .bytes)))
+  (.prod .unboundedBytes (.prod .unboundedBytes (.prod .unboundedBytes .bytes)))
   (fun ⟨ xPk, yPk, zPk, ct ⟩ => { xPk, yPk, zPk, ct })
   (fun { xPk, yPk, zPk, ct } => ⟨ xPk, yPk, zPk, ct ⟩)
 
@@ -190,7 +192,7 @@ grind_pattern [grind_later] SigInput.IsWellFormed_eq => IsWellFormed pre x tr
 public
 instance: ParseableSerializeable ClientInitiateDHState := .make <|
   .triviallyIsomorphic
-    (.prod .slowBytes .bytes)
+    (.prod .unboundedBytes .bytes)
     (fun ⟨ xPk, xSk ⟩ => { xPk, xSk })
     (fun { xPk, xSk } => ⟨ xPk, xSk ⟩)
 
@@ -209,7 +211,7 @@ grind_pattern ClientInitiateDHState.IsWellFormed_eq => IsWellFormed pre x tr
 public
 instance: ParseableSerializeable ClientInitiateKEMState := .make <|
   .triviallyIsomorphic
-    (.prod .slowBytes .bytes)
+    (.prod .unboundedBytes .bytes)
     (fun ⟨ zPk, zSk ⟩ => { zPk, zSk })
     (fun { zPk, zSk } => ⟨ zPk, zSk ⟩)
 
@@ -228,7 +230,7 @@ grind_pattern ClientInitiateKEMState.IsWellFormed_eq => IsWellFormed pre x tr
 public
 instance: ParseableSerializeable ClientFinishState := .make <|
   .triviallyIsomorphic
-    (.prod .slowBytes (.prod .slowBytes .bytes))
+    (.prod .unboundedBytes (.prod .unboundedBytes .bytes))
     (fun ⟨ xPk, zPk, kC ⟩ => { xPk, zPk, kC })
     (fun { xPk, zPk, kC } => ⟨ xPk, zPk, kC ⟩)
 
@@ -248,7 +250,7 @@ grind_pattern ClientFinishState.IsWellFormed_eq => IsWellFormed pre x tr
 public
 instance: ParseableSerializeable ServerFinishState := .make <|
   .triviallyIsomorphic
-  (.prod .slowBytes (.prod .slowBytes (.prod .slowBytes .bytes)))
+  (.prod .unboundedBytes (.prod .unboundedBytes (.prod .unboundedBytes .bytes)))
   (fun ⟨ xPk, yPk, zPk, kS ⟩ => { xPk, yPk, zPk, kS })
   (fun { xPk, yPk, zPk, kS } => ⟨ xPk, yPk, zPk, kS ⟩)
 
@@ -268,6 +270,7 @@ grind_pattern ServerFinishState.IsWellFormed_eq => IsWellFormed pre x tr
 
 end Formats
 
+-- Future work: the following section is boilerplate that could be meta-programmed
 public section ExecTraceConfig
 
 class HasExecTrace extends HasExecBytes where
@@ -309,7 +312,7 @@ instance: LongTermKeys.ExecConfig "SignedDHKEM PKI" Signature'.vk where
 
 def Client.initiate (me: Participant): Traceful (Nat × Nat × Nat) := do
   let xSk ← Random.genRand 32
-  let xPk := DiffieHellman'.dh_pk xSk
+  let xPk := DiffieHellman'.dhPk xSk
 
   let zSk ← Random.genRand 64 -- ML-KEM-512 keypair seed size
   let zPk := KEM.kemPk zSk
@@ -328,7 +331,7 @@ def Server.receive (me: Participant) (skHandle: Nat) (msgHandle: Nat): Traceful 
   let sigKey ← LongTermKeys.getPrivateKey "SignedDHKEM PKI" me skHandle
 
   let ySk ← Random.genRand 32
-  let yPk := DiffieHellman'.dh_pk ySk
+  let yPk := DiffieHellman'.dhPk ySk
   let dhss := DiffieHellman'.dh xPk ySk
   let entropy ← Random.genRand 32 -- ML-KEM-512 encapsulation seed size
   let kemResult := KEM.kemEncap zPk entropy
@@ -445,6 +448,7 @@ public section Reachability
 
 variable [HasExecTrace]
 
+-- Future work: the following section is boilerplate that could be meta-programmed
 @[expose] public section
 def Client.initiate.reachability: ReachabilityConfig := .make (fun me => Client.initiate me)
 def Server.receive.reachability: ReachabilityConfig := .make (fun (me, skHandle, msgHandle) => Server.receive me skHandle msgHandle)
@@ -457,6 +461,7 @@ end
 
 #combine into ReachabilityConfig from
   Network,
+  Random,
   LongTermKeys "SignedDHKEM PKI",
   Client.initiate,
   Server.receive,

@@ -8,18 +8,17 @@ namespace DY
 -- Generic trace definition
 
 public
-inductive Trace (α: Type) where
-  | nil: Trace α
-  | snoc: Trace α -> α -> Trace α
+structure Trace (α: Type) where
+  toArray: Array α
 
 public
-inductive Trace.le {α: Type} : Trace α -> Trace α -> Prop where
-  | equal: (tr: Trace α) -> Trace.le tr tr
-  | extend: (tr1: Trace α) -> (tr2: Trace α) -> (e: α) -> Trace.le tr1 tr2 -> Trace.le tr1 (.snoc tr2 e)
+def Trace.empty {α: Type}: Trace α :=
+  ⟨ #[] ⟩
 
 public
 instance {α: Type}: LE (Trace α) where
-  le := Trace.le
+  le tr1 tr2 :=
+    tr1.toArray = tr2.toArray.take tr1.toArray.size
 
 @[refl]
 public
@@ -27,8 +26,10 @@ theorem Trace.le_refl
   {α: Type}
   (tr: Trace α)
   : tr ≤ tr
-:=
-  Trace.le.equal tr
+:= by
+  cases tr
+  dsimp only [LE.le]
+  grind
 
 grind_pattern Trace.le_refl => tr ≤ tr
 
@@ -38,11 +39,9 @@ theorem Trace.le_trans
   (tr1 tr2 tr3: Trace α)
   : tr1 ≤ tr2 → tr2 ≤ tr3 → tr1 ≤ tr3
 := by
-  intros hxy hyz
-  induction hyz with
-  | equal => exact hxy
-  | extend tr3 e _ ih =>
-    exact (Trace.le.extend tr1 tr3 e ih)
+  cases tr1; cases tr2; cases tr3
+  dsimp only [LE.le]
+  grind
 
 public
 class TraceEntryHas (EntryT: Type) (α: Type) where
@@ -56,36 +55,28 @@ def Trace.append
   (tr: Trace α) (entry: EntryT)
   : Trace α
 :=
-  .snoc tr (TraceEntryHas.inj entry)
+  ⟨ tr.toArray.push (TraceEntryHas.inj entry) ⟩
 
 public
-def Trace.append_le
+theorem Trace.append_le
   {EntryT α: Type} [TraceEntryHas EntryT α]
   (tr: Trace α) (entry: EntryT)
   : tr ≤ tr.append entry
 := by
-  apply Trace.le.extend
-  apply Trace.le.equal
-
-public
-theorem Trace.append_eq_snoc
-  {EntryT α: Type} [TraceEntryHas EntryT α]
-  (tr: Trace α) (entry: EntryT)
-  : tr.append entry = Trace.snoc tr (TraceEntryHas.inj entry)
-:= rfl
+  cases tr
+  dsimp only [LE.le, Trace.append]
+  grind
 
 public
 def Trace.length {α: Type} (tr: Trace α) : Nat :=
-  match tr with
-  | .nil => 0
-  | .snoc trBefore _ => trBefore.length + 1
+  tr.toArray.size
 
 @[simp, grind =]
 public
-theorem Trace.length_nil
+theorem Trace.length_empty
   {α: Type}
-  : (Trace.nil : Trace α).length = 0
-:= by simp [Trace.length]
+  : (Trace.empty : Trace α).length = 0
+:= by simp [Trace.length, Trace.empty]
 
 public
 theorem Trace.length_le
@@ -93,43 +84,74 @@ theorem Trace.length_le
   : tr1 ≤ tr2 →
     tr1.length ≤ tr2.length
 := by
-  intro h
-  induction h <;>
-  grind [Trace.length]
+  cases tr1; cases tr2
+  dsimp only [LE.le, Trace.length]
+  grind
 
 grind_pattern Trace.length_le => tr1 ≤ tr2, tr1.length
 
 public
-def Trace.prefix {α: Type} (tr: Trace α) (i: Nat): Trace α :=
-  if i = tr.length then
-    tr
-  else
-    match tr with
-    | .nil => .nil
-    | .snoc trBefore _ => trBefore.prefix i
+theorem Trace.append_length
+  {EntryT α: Type} [TraceEntryHas EntryT α]
+  (tr: Trace α) (entry: EntryT)
+  : (tr.append entry).length = tr.length + 1
+:= by
+  cases tr
+  dsimp only [Trace.append, Trace.length]
+  grind
+
+grind_pattern Trace.append_length => (tr.append entry).length
 
 public
-theorem Trace.prefix_le
+def Trace.prefix {α: Type} (tr: Trace α) (i: Nat): Trace α :=
+  ⟨ tr.toArray.take i ⟩
+
+public
+theorem Trace.prefix_length
+  {α: Type}
+  (tr: Trace α) (i: Nat)
+  : (tr.prefix i).length = min tr.length i
+:= by
+  cases tr
+  dsimp only [Trace.prefix, Trace.length]
+  grind
+
+grind_pattern Trace.prefix_length => (tr.prefix i).length
+
+public
+theorem Trace.prefix_le_self
   {α: Type}
   (tr: Trace α) (i: Nat)
   : tr.prefix i ≤ tr
 := by
-  fun_induction Trace.prefix
-  · apply Trace.le_refl
-  · apply Trace.le_refl
-  · apply Trace.le.extend
-    assumption
+  cases tr
+  dsimp only [Trace.prefix, LE.le]
+  grind
 
-grind_pattern Trace.prefix_le => tr.prefix i
+grind_pattern Trace.prefix_le_self => tr.prefix i
+
+public
+theorem Trace.prefix_le_prefix
+  {α: Type}
+  (tr: Trace α) (i1 i2: Nat)
+  : i1 ≤ i2 →
+    tr.prefix i1 ≤ tr.prefix i2
+:= by
+  cases tr
+  dsimp only [Trace.prefix, LE.le]
+  grind
+
+grind_pattern Trace.prefix_le_prefix => tr.prefix i1 ≤ tr.prefix i2
 
 @[simp, grind =]
 public
-theorem Trace.prefix_eq
+theorem Trace.prefix_length_eq_self
   {α: Type}
   (tr: Trace α)
   : tr.prefix tr.length = tr
 := by
-  unfold Trace.prefix
+  cases tr
+  dsimp only [Trace.prefix, Trace.length]
   simp
 
 public
@@ -139,35 +161,77 @@ theorem Trace.prefix_length_le
   (i : Nat)
   : (tr.prefix i).length ≤ i
 := by
-  fun_induction Trace.prefix <;> simp_all [Trace.length]
+  rw [Trace.prefix_length]
+  omega
 
-/-- Truncating to a length the shorter trace already reaches cannot tell the two
-    apart. Used to move a claim about a trace onto a reachable truncation of it. -/
 public
-theorem Trace.prefix_of_le
-  {α: Type} {tr1 tr2: Trace α}
-  (h: tr1 ≤ tr2)
-  : ∀ n, n ≤ tr1.length → tr2.prefix n = tr1.prefix n
+theorem Trace.prefix_ge_length_eq_self
+  {α: Type}
+  (tr: Trace α) (i: Nat)
+  : tr.length ≤ i →
+    tr.prefix i = tr
 := by
-  induction h with
-  | equal => intro n _; rfl
-  | extend b e hab ih =>
-    intro n hn
-    have hlen := Trace.length_le _ _ hab
-    have hne : n ≠ (Trace.snoc b e).length := by grind [Trace.length]
-    rw [Trace.prefix]
-    simp only [hne, if_false]
-    exact ih n hn
+  cases tr
+  dsimp only [Trace.prefix, Trace.length, LE.le]
+  simp
+  grind
+
+public
+theorem Trace.le_imp_prefix_eq
+  {α: Type}
+  (tr1 tr2: Trace α)
+  : tr1 ≤ tr2 →
+    tr2.prefix (tr1.length) = tr1
+:= by
+  cases tr1; cases tr2
+  dsimp only [Trace.prefix, Trace.length, LE.le]
+  grind
+
+grind_pattern Trace.le_imp_prefix_eq => tr1 ≤ tr2, tr2.prefix (tr1.length)
+
+public
+theorem Trace.le_imp_prefix_le_length_eq
+  {α: Type}
+  (tr1 tr2: Trace α)
+  (i: Nat)
+  : tr1 ≤ tr2 →
+    i ≤ tr1.length →
+    tr1.prefix i = tr2.prefix i
+:= by
+  cases tr1; cases tr2
+  dsimp only [Trace.prefix, Trace.length, LE.le]
+  grind
+
+grind_pattern Trace.le_imp_prefix_le_length_eq => tr1 ≤ tr2, tr1.prefix i, tr2.prefix i
+
+public
+theorem Trace.prefix_prefix_le
+  {α: Type}
+  (tr1 tr2: Trace α) (i: Nat)
+  : tr1 ≤ tr2 →
+    tr1.prefix i ≤ tr2.prefix i
+:= by
+  cases tr1; cases tr2
+  dsimp only [Trace.prefix, LE.le]
+  grind
+
+grind_pattern Trace.prefix_prefix_le => tr1 ≤ tr2, tr1.prefix i, tr2.prefix i
+
+public
+theorem Trace.append_prefix
+  {EntryT α: Type} [TraceEntryHas EntryT α]
+  (tr: Trace α) (entry: EntryT)
+  (i: Nat) (h_i: i ≤ tr.length)
+  : (tr.append entry).prefix i = tr.prefix i
+:= by
+  revert h_i
+  cases tr
+  dsimp only [Trace.prefix, Trace.append, Trace.length]
+  grind
 
 public
 def Trace.at {α: Type} (tr: Trace α) (i: Nat) (h_i: i < tr.length): α :=
-  match tr with
-  | .nil => False.elim (by simp_all [Trace.length])
-  | .snoc trBefore entry =>
-    if h: i = trBefore.length then
-      entry
-    else
-      trBefore.at i (by grind [Trace.length])
+  tr.toArray[i]
 
 public
 theorem Trace.at_le
@@ -175,8 +239,10 @@ theorem Trace.at_le
   (h_le: tr1 ≤ tr2)
   : tr1.at i h_i = tr2.at i (by grind)
 := by
-  induction h_le <;>
-  grind [Trace.at]
+  revert h_i h_le
+  cases tr1; cases tr2
+  dsimp only [Trace.at, Trace.length, LE.le]
+  grind
 
 grind_pattern Trace.at_le => tr1 ≤ tr2, tr1.at i h_i
 grind_pattern [grind_later] Trace.at_le => tr1 ≤ tr2, tr1.at i h_i
@@ -242,7 +308,9 @@ theorem Trace.length_prefix
   {α: Type} (tr: Trace α) (n: Nat)
   : n ≤ tr.length → (tr.prefix n).length = n
 := by
-  fun_induction Trace.prefix <;> grind [Trace.length]
+  intro h
+  rw [Trace.prefix_length]
+  omega
 
 /-- Truncating past a position leaves what is at that position alone, so an
     event still sits where it did. -/
@@ -258,7 +326,7 @@ theorem Trace.at?_prefix
   have h2 : i < tr.length := by omega
   unfold Trace.at?
   simp only [h1, h2, dif_pos]
-  rw [Trace.at_le (tr.prefix n) tr i h1 (Trace.prefix_le tr n)]
+  rw [Trace.at_le (tr.prefix n) tr i h1 (Trace.prefix_le_self tr n)]
 
 -- Execution trace
 
@@ -358,6 +426,7 @@ macro_rules
       combineName := ``DY.ExecTraceTypes.combine
       internalOutTypeStx := fun _ _ => `(term| Type)
       outTypeStx := fun _ => `(term| Type)
+      isTheorem := false
     }
 
     let hasStep ← mkHasStep params sources <| .makeSimple {

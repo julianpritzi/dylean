@@ -131,7 +131,24 @@ theorem _root_.DY.Trace.EventLoggedAt_prefix
   rw [Trace.at?_prefix tr i n h_i h_n]
   exact h
 
-@[grind]
+public
+theorem _root_.DY.Trace.EventLoggedAt_le'
+  {EventT: Type}
+  [ExecTraceTypes]
+  [ExecTraceTypes.Has (ExecEntryT EventT)]
+  (ev: EventT) (time: Nat)
+  (tr1 tr2: ExecTrace)
+  : time < tr1.length →
+    tr1 ≤ tr2 →
+    tr2.EventLoggedAt ev time →
+    tr1.EventLoggedAt ev time
+:= by
+  grind [Trace.EventLoggedAt, Trace.at?_eq_some]
+
+grind_pattern Trace.EventLoggedAt_le => tr1 ≤ tr2, tr1.EventLoggedAt ev time
+grind_pattern [grind_later] Trace.EventLoggedAt_le => tr1 ≤ tr2, tr1.EventLoggedAt ev time
+
+@[expose, grind]
 public
 def _root_.DY.Trace.EventLogged
   {EventT: Type}
@@ -198,6 +215,10 @@ theorem _root_.DY.Trace.EventLoggedAt_imp_EventLogged
 := by
   grind [Trace.EventLogged]
 
+-- `EventLogged` is exposed, so `step`'s monotonizer (`grind only [grind_later]`) unfolds a
+-- logged-event hypothesis to a position and must fold it back on the grown trace.
+grind_pattern [grind_later] Trace.EventLoggedAt_imp_EventLogged => tr.EventLoggedAt ev i
+
 public
 theorem _root_.DY.Trace.EventLoggedAt_imp_EventInv
   {EventT: Type}
@@ -231,9 +252,8 @@ theorem _root_.DY.Trace.EventLogged_imp_EventInv
     tr.erase.EventLogged ev →
     ∃ i, EventInv.invariant (tr.prefix i) ev
 := by
-  intro h_inv h_ev
-  obtain ⟨i, h_at⟩ := h_ev
-  exact ⟨i, Trace.EventLoggedAt_imp_EventInv ev i tr h_inv h_at⟩
+  intro h_inv ⟨ i, h_ev ⟩
+  exact ⟨ i, DY.Trace.EventLoggedAt_imp_EventInv ev i tr h_inv h_ev ⟩
 
 public
 def logEvent
@@ -272,7 +292,7 @@ theorem logEvent_run_fst
 
 @[instance]
 public
-theorem logEvent.spec
+theorem logEvent.proof
   {EventT: Type}
   [ExecTraceTypes] [ProofTraceTypes] [TraceInvariant]
   [EventInv EventT]

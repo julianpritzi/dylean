@@ -234,21 +234,22 @@ def concat.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF] [BytesLength
   pred p out :=
     ∃ lhs rhs,
       out = concat lhs rhs ∧
-      DY.Kleene.Forall p [lhs, rhs]
+      p lhs ∧
+      p rhs
 
 public
 def splitLeft.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF] [BytesLength]: SubAttackerKnowledge SubF where
   pred p out :=
     ∃ inp rhs i,
       some (out, rhs) = split inp i ∧
-      DY.Kleene.Forall p [inp]
+      p inp
 
 public
 def splitRight.attackerKnowledge [BytesFunctor] [BytesFunctor.Has SubF] [BytesLength]: SubAttackerKnowledge SubF where
   pred p out :=
     ∃ inp lhs i,
       some (lhs, out) = split inp i ∧
-      DY.Kleene.Forall p [inp]
+      p inp
 
 #combine [BytesFunctor.Has SubF] [BytesLength] into attackerKnowledge' from
   concat,
@@ -269,7 +270,7 @@ theorem attacker_knows_concat
 := by
   intro h_lhs h_rhs
   apply Bytes.AttackerKnows.prove concat.attackerKnowledge
-  simp only [concat.attackerKnowledge, Kleene.Forall]
+  simp only [concat.attackerKnowledge]
   grind
 
 public
@@ -284,22 +285,24 @@ theorem attacker_knows_split
 := by
   intro h_buf
   split
-  · trivial
+  · grind
   rename_i lhs rhs _
   constructor
   · apply Bytes.AttackerKnows.prove splitLeft.attackerKnowledge
-    simp only [splitLeft.attackerKnowledge, Kleene.Forall]
+    simp only [splitLeft.attackerKnowledge]
     grind
   · apply Bytes.AttackerKnows.prove splitRight.attackerKnowledge
-    simp only [splitRight.attackerKnowledge, Kleene.Forall]
+    simp only [splitRight.attackerKnowledge]
     grind
 
 end AttackerKnowledge
 
 section Invariants
 
+section Definition
+
 variable [ExecTraceTypes] [ProofTraceTypes]
-variable [BytesFunctor] [BytesFunctor.Has SubF]
+variable [BytesFunctor]
 
 public
 def Concat.invariants: Bytes.PartialInvariants Concat.SubF where
@@ -315,7 +318,9 @@ def Concat.invariants: Bytes.PartialInvariants Concat.SubF where
     (rec lhs) tr ∧ (rec rhs) tr
 
 public
-def Concat.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs Concat.invariants where
+theorem Concat.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs Concat.invariants where
+
+end Definition
 
 #combine into
   BytesInvariants,
@@ -323,6 +328,9 @@ def Concat.invariantsProofs [BytesInvariants]: Bytes.PartialInvariantsProofs Con
 from
   Concat,
 
+
+variable [ExecTraceTypes] [ProofTraceTypes]
+variable [BytesFunctor] [BytesFunctor.Has SubF]
 variable [BytesLength]
 
 @[simp]
@@ -400,7 +408,7 @@ theorem split.WellFormed
       buf.WellFormed tr = (lhs.WellFormed tr ∧ rhs.WellFormed tr)
 := by
   split
-  · trivial
+  · grind
   rename_i lhs rhs heq
   rewrite [← concat_split buf i lhs rhs heq]
   simp
@@ -416,7 +424,7 @@ theorem split.label
       buf.label tr = Label.meet (lhs.label tr) (rhs.label tr)
 := by
   split
-  · trivial
+  · grind
   rename_i lhs rhs heq
   rewrite [← concat_split buf i lhs rhs heq]
   simp
@@ -434,7 +442,7 @@ theorem split.Invariant
 := by
   intro h_buf
   split
-  · trivial
+  · grind
   rename_i lhs rhs heq
   rewrite [← concat_split buf i lhs rhs heq] at h_buf
   simp_all
@@ -455,7 +463,6 @@ instance: SubAttackerKnowledgeTheorem concat.attackerKnowledge where
     simp only [concat.attackerKnowledge]
     intro out tr h_tr ⟨lhs, rhs, ⟨ h_out, h_inputs ⟩⟩
     subst h_out
-    simp [Kleene.Forall] at h_inputs
     simp [Bytes.Publishable]
     grind
 
@@ -464,7 +471,6 @@ instance: SubAttackerKnowledgeTheorem splitLeft.attackerKnowledge where
   pf := by
     simp only [splitLeft.attackerKnowledge]
     intro out tr h_tr ⟨inp, rhs, i, ⟨ h_out, h_inputs ⟩⟩
-    simp [Kleene.Forall] at h_inputs
     simp [Bytes.Publishable]
     have := split.label inp i tr
     have := split.Invariant inp i tr
@@ -475,7 +481,6 @@ instance: SubAttackerKnowledgeTheorem splitRight.attackerKnowledge where
   pf := by
     simp only [splitRight.attackerKnowledge]
     intro out tr h_tr ⟨inp, lhs, i, ⟨ h_out, h_inputs ⟩⟩
-    simp [Kleene.Forall] at h_inputs
     simp [Bytes.Publishable]
     have := split.label inp i tr
     have := split.Invariant inp i tr

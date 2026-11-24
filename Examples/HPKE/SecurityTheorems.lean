@@ -48,7 +48,7 @@ theorem pt_secrecy
         have h_pt_wf_prefix : pt.WellFormed (tr.prefix time) :=
           Bytes.Invariant_implies_WellFormed pt (tr.prefix time) h_pt_inv_prefix
         have h_pt_lbl_eq : pt.label (tr.prefix time) = pt.label tr :=
-          Bytes.label_later pt (tr.prefix time) tr (Trace.prefix_le tr time) h_pt_wf_prefix
+          Bytes.label_later pt (tr.prefix time) tr (Trace.prefix_le_self tr time) h_pt_wf_prefix
         have h_ltk_pt_current' :
             (LongTermKeys.label "HPKE Auth PKI" recipient rpk).canFlow (pt.label (tr.prefix time)) (Trace.erase tr) :=
           by
@@ -57,7 +57,7 @@ theorem pt_secrecy
               simpa [Trace.prefix_erase] using h_ltk_pt_prefix
             exact Label.canFlowLater (LongTermKeys.label "HPKE Auth PKI" recipient rpk) (pt.label (tr.prefix time))
               (Trace.prefix (Trace.erase tr) time) (Trace.erase tr)
-              (Trace.prefix_le (Trace.erase tr) time)
+              (Trace.prefix_le_self (Trace.erase tr) time)
               h_ltk_pt_prefix'
         have h_ltk_pt_current :
             (LongTermKeys.label "HPKE Auth PKI" recipient rpk).canFlow (pt.label tr) (Trace.erase tr) := by

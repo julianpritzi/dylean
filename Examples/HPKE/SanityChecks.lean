@@ -61,7 +61,7 @@ def honestAttacker: Traceful Unit := do
   return ()
 
 #guard (
-  let run := honestAttacker.run Trace.nil
+  let run := honestAttacker.run Trace.empty
   match firstSealPt run.snd.1, firstOpenPt run.snd.1 with
   | some sealPt, some openPt => sealPt = openPt
   | _, _ => False
@@ -104,7 +104,7 @@ def compromiseRecipientLtkAttacker: Traceful Bytes := do
   return openedPt
 
 #guard (
-  let run := compromiseRecipientLtkAttacker.run Trace.nil
+  let run := compromiseRecipientLtkAttacker.run Trace.empty
   match run.fst, firstSealPt run.snd.1 with
   | some openedPt, some sealPt => openedPt = sealPt
   | _, _ => False
